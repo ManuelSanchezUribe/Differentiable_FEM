@@ -22,7 +22,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import matplotlib.pyplot as plt
-import tensorflow as tf
 import os
 
 os.environ["KERAS_BACKEND"] = "jax"
@@ -46,6 +45,9 @@ keras.backend.set_floatx(dtype)
 #
 # =============================================================================
 
+# class special_layer(keras.layers.Layer):
+#     def __init__(self, **kwargs):
+#         super().
 
 ## Define an approximate solution (u_nn): A neural network model
 def make_model(neurons, n_layers, n_output, activation='tanh'):
@@ -76,7 +78,7 @@ def make_model(neurons, n_layers, n_output, activation='tanh'):
         # Hidden layers
         l1 = keras.layers.Dense(neurons, activation=activation, dtype=dtype)(l1)
     # Last layer
-    output = keras.layers.Dense(n_output, activation='softmax', dtype=dtype)(l1)
+    output = keras.layers.Dense(n_output, activation=activation, dtype=dtype)(l1)
 
     model = keras.Model(inputs = xvals, outputs = output, name='model')
 
@@ -171,12 +173,14 @@ nn = 10
 # Number of hidden layers
 nl = 4
 # Number of output neurons
-n_output = 10
+n_output = 100
 # Number of training iterations
 iterations = 1000
 
 # Initialize the neural network model for the approximate solution
 model = make_model(neurons=nn, n_layers=nl, n_output=n_output)
+
+init_nodes = model(jnp.array([1]))
 
 # Big model including the  loss
 loss_model = make_loss_model(model)
@@ -192,6 +196,9 @@ loss_model.compile(optimizer=optimizer, loss=tricky_loss)
 history = loss_model.fit(jnp.array([1.]), jnp.array([1.]), epochs=iterations)
 
 
+#Plot loss history
+plt.figure()
+plt.plot(history.history['loss'])
 
 # # Define the problem domain and mesh
 # n_elements = 10  # Number of elements
@@ -203,6 +210,7 @@ history = loss_model.fit(jnp.array([1.]), jnp.array([1.]), epochs=iterations)
 # # node_coords, u = solve(theta)
 
 node_coords, u = solve(model(jnp.array([1])))
+init_coords, o = solve(init_nodes)
 
 
 # # Output results
@@ -230,9 +238,11 @@ from matplotlib import rcParams
 
 # fig, ax = plt.subplots()
 # # Plot the approximate solution obtained from the trained model
+plt.figure()
 plt.plot(node_coords, u, color='b')
-
-# plt.legend(['u_approx', 'u_exact'])
+plt.plot(node_coords, np.zeros(len(node_coords)),'o', color='r')
+plt.plot(init_coords, np.zeros(len(node_coords)),'o', color='k')
+plt.legend(['u', 'nodes', 'initial nodes'])
 
 plt.grid(which = 'both', axis = 'both', linestyle = ':', color = 'gray')
 plt.tight_layout()

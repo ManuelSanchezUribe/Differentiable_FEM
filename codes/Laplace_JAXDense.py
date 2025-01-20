@@ -6,24 +6,24 @@ import keras
 
 def softmax_nodes(params):
     # Compute the softmax values
-    # softmax_values = jax.nn.softmax(params)
+    softmax_values = jax.nn.softmax(params)
     # softmax_values = jax.nn.softmax(params)
 
     # print(paa)
     # Compute the cumulative sum of the softmax values
-    cumulative_sum = jnp.cumsum(params)
+    cumulative_sum = jnp.cumsum(softmax_values)
 
     return cumulative_sum
 
 # Define source function f(x)
 def f(x):
-    return 0
+    return 2
 
 # Boundary conditions
 def g0():
-    return 0.5  # Value of u at x = 0
+    return 0  # Value of u at x = 0
 def g1():
-    return -0.5  # Value of u at x = 1
+    return -0  # Value of u at x = 1
 
 # Element stiffness matrix and load vector
 def element_stiffness(h):
@@ -42,7 +42,7 @@ def element_load(coords):
     return h * jnp.array([f(pt1)*phiatpt1 + f(pt2)*phiatpt2, f(pt1)*phiatpt2 + f(pt2)*phiatpt1]) / 2
 
 # Assemble global stiffness matrix and load vector
-def assemble(n_elements, node_coords, element_length):
+def assemble(n_elements, node_coords, element_length, n_nodes):
     element_nodes = jnp.array([[i, i + 1] for i in range(n_elements)])
     coords = node_coords[element_nodes]
     h_values = element_length
@@ -93,7 +93,7 @@ def solve(theta):
     node_coords = softmax_nodes(theta)
     element_length = node_coords[1:] - node_coords[:-1]
 
-    K, F = assemble(n_elements, node_coords, element_length)
+    K, F = assemble(n_elements, node_coords, element_length, n_nodes)
     K, F = apply_boundary_conditions(K, F)
     u = jnp.linalg.solve(K, F)
 
@@ -106,10 +106,10 @@ def solve_and_loss(theta):
     node_coords = softmax_nodes(theta)
     element_length = node_coords[1:] - node_coords[:-1]
 
-    K, F = assemble(n_elements, node_coords, element_length)
+    K, F = assemble(n_elements, node_coords, element_length, n_nodes)
     K, F = apply_boundary_conditions(K, F)
     u = jnp.linalg.solve(K, F)
-    loss = 0.5*jnp.dot(u, jnp.dot(K, u)) + jnp.dot(F, u)
+    loss = 0.5*jnp.dot(u, jnp.dot(K, u)) - jnp.dot(F, u)
 
     return loss
 
