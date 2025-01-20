@@ -22,7 +22,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import matplotlib.pyplot as plt
-
+import tensorflow as tf
 import os
 
 os.environ["KERAS_BACKEND"] = "jax"
@@ -76,12 +76,12 @@ def make_model(neurons, n_layers, n_output, activation='tanh'):
         # Hidden layers
         l1 = keras.layers.Dense(neurons, activation=activation, dtype=dtype)(l1)
     # Last layer
-    output = keras.layers.Dense(n_output, activation=activation, dtype=dtype)(l1)
+    output = keras.layers.Dense(n_output, activation='softmax', dtype=dtype)(l1)
 
     model = keras.Model(inputs = xvals, outputs = output, name='model')
 
     # Print the information of the model u
-    model.summary()
+    # model.summary()
 
     return model
 
@@ -104,7 +104,7 @@ class loss(keras.layers.Layer):
 
         self.model = model
 
-    def call(self):
+    def call(self, inputs):
 
         """
         Computes the collocation - PINNs loss.
@@ -117,8 +117,8 @@ class loss(keras.layers.Layer):
         """
 
         theta = self.model(jnp.array([1]))
-
-        return solve_and_loss(theta)
+        loss = solve_and_loss(theta)
+        return  loss
 
 
 ## Create a loss model
@@ -137,8 +137,8 @@ def make_loss_model(model):
 
     # Compute the loss using the provided neural network and
     # integration parameters
-    output = loss(model)
-
+    output = loss(model)(xvals)
+    # output = loss_dummy(model)(xvals)
     # Create a Keras model for the loss
     loss_model = keras.Model(inputs=xvals, outputs=output)
 

@@ -6,10 +6,12 @@ import keras
 
 def softmax_nodes(params):
     # Compute the softmax values
-    softmax_values = jax.nn.softmax(params)
-    
+    # softmax_values = jax.nn.softmax(params)
+    # softmax_values = jax.nn.softmax(params)
+
+    # print(paa)
     # Compute the cumulative sum of the softmax values
-    cumulative_sum = jnp.cumsum(softmax_values)
+    cumulative_sum = jnp.cumsum(params)
 
     return cumulative_sum
 
@@ -85,9 +87,8 @@ def eval_loss(K,F,u):
     return 0.5*jnp.dot(u, jnp.dot(K, u)) + jnp.dot(F, u)
 
 # Solve the system
-@jit
 def solve(theta):
-    n_nodes = theta.size
+    n_nodes = theta.shape[1]
     n_elements = n_nodes - 1
     node_coords = softmax_nodes(theta)
     element_length = node_coords[1:] - node_coords[:-1]
@@ -99,9 +100,8 @@ def solve(theta):
     return node_coords, u
 
 # Solve the system
-@jit
 def solve_and_loss(theta):
-    n_nodes = theta.size
+    n_nodes = theta.shape[1]
     n_elements = n_nodes - 1
     node_coords = softmax_nodes(theta)
     element_length = node_coords[1:] - node_coords[:-1]
@@ -111,7 +111,7 @@ def solve_and_loss(theta):
     u = jnp.linalg.solve(K, F)
     loss = 0.5*jnp.dot(u, jnp.dot(K, u)) + jnp.dot(F, u)
 
-    return keras.tensor(loss)
+    return loss
 
 
 # # Define the problem domain and mesh
