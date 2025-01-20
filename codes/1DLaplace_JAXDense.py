@@ -2,14 +2,15 @@ import jax
 import jax.numpy as jnp
 from jax import jit
 
-# Define the problem domain and mesh
-n_elements = 10  # Number of elements
-n_nodes = n_elements + 1
-length = 1.0
 
-# Define a nonequidistant mesh (e.g., using a quadratic distribution)
-node_coords = jnp.sort(jnp.linspace(0, 1, n_nodes)**2)
-element_length = node_coords[1:] - node_coords[:-1]
+def softmax_nodes(params):
+    # Compute the softmax values
+    softmax_values = jax.nn.softmax(params)
+    
+    # Compute the cumulative sum of the softmax values
+    cumulative_sum = jnp.cumsum(softmax_values)
+
+    return cumulative_sum
 
 # Define source function f(x)
 def f(x):
@@ -38,7 +39,7 @@ def element_load(coords):
     return h * jnp.array([f(pt1)*phiatpt1 + f(pt2)*phiatpt2, f(pt1)*phiatpt2 + f(pt2)*phiatpt1]) / 2
 
 # Assemble global stiffness matrix and load vector
-def assemble():
+def assemble(n_elements, node_coords, element_length):
     element_nodes = jnp.array([[i, i + 1] for i in range(n_elements)])
     coords = node_coords[element_nodes]
     h_values = element_length
@@ -79,45 +80,80 @@ def apply_boundary_conditions(K, F):
 
     return K, F
 
+def eval_loss(K,F,u):
+    return 0.5*jnp.dot(u, jnp.dot(K, u)) + jnp.dot(F, u)
+
 # Solve the system
 @jit
-def solve():
-    K, F = assemble()
+def solve(theta):
+    n_nodes = theta.size
+    n_elements = n_nodes - 1
+    node_coords = softmax_nodes(theta)
+    element_length = node_coords[1:] - node_coords[:-1]
+
+    K, F = assemble(n_elements, node_coords, element_length)
     K, F = apply_boundary_conditions(K, F)
     u = jnp.linalg.solve(K, F)
-    return u
+
+    return node_coords, u
+
+# Solve the system
+@jit
+def solve_and_loss(theta):
+    n_nodes = theta.size
+    n_elements = n_nodes - 1
+    node_coords = softmax_nodes(theta)
+    element_length = node_coords[1:] - node_coords[:-1]
+
+    K, F = assemble(n_elements, node_coords, element_length)
+    K, F = apply_boundary_conditions(K, F)
+    u = jnp.linalg.solve(K, F)
+    loss = 0.5*jnp.dot(u, jnp.dot(K, u)) + jnp.dot(F, u)
+
+    return loss
+
+
+# Define the problem domain and mesh
+n_elements = 10  # Number of elements
+n_nodes = n_elements + 1
 
 # Run the solver
-u = solve()
+theta = jax.random.uniform(key=jax.random.PRNGKey(10),shape=(1,n_nodes))
 
-# Output results
-print("Node coordinates:", node_coords)
-print("Solution u:", u)
+# node_coords, u = solve(theta)
+node_coords, u, val = solve_and_loss(theta)
+
+# # Output results
+# print("Node coordinates:", node_coords)
+# print("Solution u:", u)
+print(val)
 
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 
 
-rcParams['font.family'] = 'serif'
-rcParams['font.size'] = 18
-rcParams['legend.fontsize'] = 17
-rcParams['mathtext.fontset'] = 'cm'
-rcParams['axes.labelsize'] = 19
+# rcParams['font.family'] = 'serif'
+# rcParams['font.size'] = 18
+# rcParams['legend.fontsize'] = 17
+# rcParams['mathtext.fontset'] = 'cm'
+# rcParams['axes.labelsize'] = 19
 
 
-# Generate a list of x values for visualization
-xlist = node_coords
+# # Generate a list of x values for visualization
+# xlist = node_coords
 
-## ---------
-# SOLUTION
+# ## ---------
+# # SOLUTION
 ## ---------
 
 fig, ax = plt.subplots()
 # Plot the approximate solution obtained from the trained model
-plt.plot(xlist, u, color='b')
+plt.plot(node_coords, u, color='b')
 
 plt.legend(['u_approx', 'u_exact'])
 
 ax.grid(which = 'both', axis = 'both', linestyle = ':', color = 'gray')
 plt.tight_layout()
+
+plt.savefig('plot.png')
 plt.show()
