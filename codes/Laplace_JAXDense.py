@@ -3,6 +3,8 @@ import jax.numpy as jnp
 from jax import jit
 import keras
 
+global problem_number
+problem_number=2
 
 def softmax_nodes(params):
     # Compute the softmax values
@@ -16,10 +18,10 @@ def softmax_nodes(params):
     return cumulative_sum
 
 # Define source function f(x)
-def f(x):
-    # return 0.7*0.3*x**(-1.3) + 1.7*0.7*x**(-0.3)
-    # return 0
-    return 0.7*0.3*x**(-1.3)
+# def f(x):
+#     # return 0.7*0.3*x**(-1.3) + 1.7*0.7*x**(-0.3)
+#     # return 0
+#     return 0.7*0.3*x**(-1.3)
 
 # Boundary conditions
 def g0():
@@ -43,6 +45,8 @@ def element_load(coords):
     phiatpt2 = (1+p1)/2
     #midpoint = (x1 + x2) / 2
     h = x2 - x1
+    problem_test = problem(problem_number)
+    f = problem_test.f
     return h * jnp.array([f(pt1)*phiatpt1 + f(pt2)*phiatpt2, f(pt1)*phiatpt2 + f(pt2)*phiatpt1]) / 2
 
 # Assemble global stiffness matrix and load vector
@@ -69,8 +73,11 @@ def assemble(n_elements, node_coords, element_length, n_nodes):
 
 # Apply boundary conditions
 def apply_boundary_conditions(K, F):
-    bc_g0 = g0()
-    bc_g1 = g1()
+    problem_test = problem(problem_number)
+    bc_g0 = problem_test.g0
+    # bc_g1 = problem_test.g1
+    # bc_g0 = g0()
+    # bc_g1 = g1()
 
     F = F - K[:, 0] * bc_g0
     # F = F - K[:, -1] * bc_g1
@@ -164,3 +171,62 @@ def solve_and_loss(theta):
 
 # plt.savefig('plot.png')
 # plt.show()
+
+class Elliptic1D:
+    def __init__(self, f, g0, g1, sigma, u=None):
+        """
+        Initializes the 1D elliptic problem.
+
+        Parameters:
+        - f (callable): Right-hand side function f(x).
+        - g0 (float): Dirichlet boundary condition at x=0.
+        - g1 (float): Dirichlet boundary condition at x=1.
+        - sigma (callable): Coefficient function sigma(x).
+        - u (callable, optional): Solution function (if known, default is None).
+        """
+        self.a = 0.0  # Left endpoint of the domain
+        self.b = 1.0  # Right endpoint of the domain
+        self.f = f
+        self.g0 = g0
+        self.g1 = g1
+        self.sigma = sigma
+        self.u = u  # Analytical solution, if provided
+
+def problem(problem_number):
+    """
+    Returns an Elliptic1D problem instance based on the problem number.
+
+    Parameters:
+    - problem_number (int): The index of the desired problem (0-based).
+
+    Returns:
+    - Elliptic1D: An instance of the elliptic problem.
+    """
+    problems_data = [
+        {
+            "f": lambda x: 0 * x,  # Zero source term
+            "g0": 0.5,  # Dirichlet boundary condition at x=0
+            "g1": -0.5,  # Dirichlet boundary condition at x=1
+            "sigma": lambda x: 1,  # Constant coefficient sigma(x)
+        },
+        {
+            "f": lambda x: jnp.sin(jnp.pi * x),  # Sinusoidal source term
+            "g0": 0,  # Dirichlet boundary condition at x=0
+            "g1": 0,  # Dirichlet boundary condition at x=1
+            "sigma": lambda x: 1,  # Constant coefficient sigma(x)
+        },
+        {
+            "f": lambda x: 0.7 * 0.3 * x ** (-1.3),  # Singular source term
+            "g0": 0,  # Dirichlet boundary condition at x=0
+            "g1": 0,  # Dirichlet boundary condition at x=1
+            "sigma": lambda x: 1,  # Constant coefficient sigma(x)
+        },
+    ]
+
+    # Ensure problem_number is within bounds
+    if problem_number < 0 or problem_number >= len(problems_data):
+        raise ValueError(f"Invalid problem number: {problem_number}. Must be between 0 and {len(problems_data) - 1}.")
+
+    # Retrieve problem data and unpack into the Elliptic1D class
+    data = problems_data[problem_number]
+    return Elliptic1D(**data)
