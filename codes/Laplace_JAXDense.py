@@ -17,13 +17,17 @@ def softmax_nodes(params):
 
 # Define source function f(x)
 def f(x):
-    return 2
+    # return 0.7*0.3*x**(-1.3) + 1.7*0.7*x**(-0.3)
+    # return 0
+    return 0.7*0.3*x**(-1.3)
 
 # Boundary conditions
 def g0():
     return 0  # Value of u at x = 0
+    # return 0.5
 def g1():
-    return -0  # Value of u at x = 1
+    return 0  # Value of u at x = 1
+    # return -0.5
 
 # Element stiffness matrix and load vector
 def element_stiffness(h):
@@ -69,17 +73,18 @@ def apply_boundary_conditions(K, F):
     bc_g1 = g1()
 
     F = F - K[:, 0] * bc_g0
-    F = F - K[:, -1] * bc_g1
+    # F = F - K[:, -1] * bc_g1
 
     K = K.at[0, :].set(0)
     K = K.at[:, 0].set(0)
-    K = K.at[-1, :].set(0)
-    K = K.at[:, -1].set(0)
+    # K = K.at[-1, :].set(0)
+    # K = K.at[:, -1].set(0)
     K = K.at[0, 0].set(1)
-    K = K.at[-1, -1].set(1)
+    # K = K.at[-1, -1].set(1)
 
     F = F.at[0].set(bc_g0)
-    F = F.at[-1].set(bc_g1)
+    # F = F.at[-1].set(bc_g1)
+    F = F.at[-1].set(F[-1]+0.7)
 
     return K, F
 
@@ -109,6 +114,7 @@ def solve_and_loss(theta):
     K, F = assemble(n_elements, node_coords, element_length, n_nodes)
     K, F = apply_boundary_conditions(K, F)
     u = jnp.linalg.solve(K, F)
+    
     loss = 0.5*jnp.dot(u, jnp.dot(K, u)) - jnp.dot(F, u)
 
     return loss

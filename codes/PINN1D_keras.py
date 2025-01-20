@@ -57,9 +57,9 @@ class special_layer(keras.layers.Layer):
             self.mobile_interior_vertices.assign(jnp.ones((dimension, n_nodes)) / n_nodes)
 
     def call(self, inputs):
-        return self.mobile_interior_vertices
+        return jnp.array(self.mobile_interior_vertices)
 
-def make_special_model(n_nodes, dimension, w_interior_initial_values):
+def make_special_model(n_nodes, dimension=1, w_interior_initial_values=None):
     L = special_layer(n_nodes, dimension, w_interior_initial_values)
     xvals = keras.layers.Input(shape=(1,), name='x_input',dtype=dtype)
     output = L(xvals)
@@ -186,16 +186,16 @@ def tricky_loss(y_pred, y_true):
 # =============================================================================
 
 # Number of neurons per hidden layer in the neural network
-nn = 10
+nn = 32
 # Number of hidden layers
 nl = 4
 # Number of output neurons
-n_output = 100
+n_output = 32
 # Number of training iterations
-iterations = 1000
+iterations = 5000
 
 # Initialize the neural network model for the approximate solution
-model = make_model(neurons=nn, n_layers=nl, n_output=n_output)
+model = make_special_model(nn)
 
 init_nodes = model(jnp.array([1]))
 
@@ -203,7 +203,7 @@ init_nodes = model(jnp.array([1]))
 loss_model = make_loss_model(model)
 
 # Optimizer (Adam optimizer with a specific learning rate)
-optimizer = keras.optimizers.Adam(learning_rate=1e-3)
+optimizer = keras.optimizers.Adam(learning_rate=1e-2)
 
 # Compile the loss model with a custom loss function (tricky_loss)
 loss_model.compile(optimizer=optimizer, loss=tricky_loss)
@@ -216,6 +216,7 @@ history = loss_model.fit(jnp.array([1.]), jnp.array([1.]), epochs=iterations)
 #Plot loss history
 plt.figure()
 plt.plot(history.history['loss'])
+plt.savefig('loss.png')
 
 # # Define the problem domain and mesh
 # n_elements = 10  # Number of elements
@@ -256,7 +257,7 @@ from matplotlib import rcParams
 # fig, ax = plt.subplots()
 # # Plot the approximate solution obtained from the trained model
 plt.figure()
-plt.plot(node_coords, u, color='b')
+plt.plot(node_coords, u,'o--', color='b')
 plt.plot(node_coords, np.zeros(len(node_coords)),'o', color='r')
 plt.plot(init_coords, np.zeros(len(node_coords)),'o', color='k')
 plt.legend(['u', 'nodes', 'initial nodes'])
@@ -264,5 +265,5 @@ plt.legend(['u', 'nodes', 'initial nodes'])
 plt.grid(which = 'both', axis = 'both', linestyle = ':', color = 'gray')
 plt.tight_layout()
 
-# plt.savefig('plot.png')
+plt.savefig('plot.png')
 plt.show()
