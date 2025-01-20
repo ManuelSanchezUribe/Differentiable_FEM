@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 from jax import jit
+import keras
 
 
 def softmax_nodes(params):
@@ -110,50 +111,50 @@ def solve_and_loss(theta):
     u = jnp.linalg.solve(K, F)
     loss = 0.5*jnp.dot(u, jnp.dot(K, u)) + jnp.dot(F, u)
 
-    return loss
+    return keras.tensor(loss)
 
 
-# Define the problem domain and mesh
-n_elements = 10  # Number of elements
-n_nodes = n_elements + 1
+# # Define the problem domain and mesh
+# n_elements = 10  # Number of elements
+# n_nodes = n_elements + 1
 
-# Run the solver
-theta = jax.random.uniform(key=jax.random.PRNGKey(10),shape=(1,n_nodes))
+# # Run the solver
+# theta = jax.random.uniform(key=jax.random.PRNGKey(10),shape=(1,n_nodes))
 
-# node_coords, u = solve(theta)
-node_coords, u, val = solve_and_loss(theta)
+# # node_coords, u = solve(theta)
+# node_coords, u, val = solve_and_loss(theta)
 
-# # Output results
-# print("Node coordinates:", node_coords)
-# print("Solution u:", u)
-print(val)
+# # # Output results
+# # print("Node coordinates:", node_coords)
+# # print("Solution u:", u)
+# print(val)
 
-import matplotlib.pyplot as plt
-from matplotlib import rcParams
-
-
-# rcParams['font.family'] = 'serif'
-# rcParams['font.size'] = 18
-# rcParams['legend.fontsize'] = 17
-# rcParams['mathtext.fontset'] = 'cm'
-# rcParams['axes.labelsize'] = 19
+# import matplotlib.pyplot as plt
+# from matplotlib import rcParams
 
 
-# # Generate a list of x values for visualization
-# xlist = node_coords
+# # rcParams['font.family'] = 'serif'
+# # rcParams['font.size'] = 18
+# # rcParams['legend.fontsize'] = 17
+# # rcParams['mathtext.fontset'] = 'cm'
+# # rcParams['axes.labelsize'] = 19
 
+
+# # # Generate a list of x values for visualization
+# # xlist = node_coords
+
+# # ## ---------
+# # # SOLUTION
 # ## ---------
-# # SOLUTION
-## ---------
 
-fig, ax = plt.subplots()
-# Plot the approximate solution obtained from the trained model
-plt.plot(node_coords, u, color='b')
+# fig, ax = plt.subplots()
+# # Plot the approximate solution obtained from the trained model
+# plt.plot(node_coords, u, color='b')
 
-plt.legend(['u_approx', 'u_exact'])
+# plt.legend(['u_approx', 'u_exact'])
 
-ax.grid(which = 'both', axis = 'both', linestyle = ':', color = 'gray')
-plt.tight_layout()
+# ax.grid(which = 'both', axis = 'both', linestyle = ':', color = 'gray')
+# plt.tight_layout()
 
-plt.savefig('plot.png')
-plt.show()
+# plt.savefig('plot.png')
+# plt.show()
