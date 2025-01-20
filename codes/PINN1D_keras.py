@@ -45,9 +45,26 @@ keras.backend.set_floatx(dtype)
 #
 # =============================================================================
 
-# class special_layer(keras.layers.Layer):
-#     def __init__(self, **kwargs):
-#         super().
+class special_layer(keras.layers.Layer):
+    def __init__(self, n_nodes, dimension, w_interior_initial_values = None, **kwargs):
+        super().__init__(**kwargs)
+
+        self.mobile_interior_vertices = self.add_weight(shape = (dimension, n_nodes), initializer = 'ones')
+        
+        if w_interior_initial_values is not None:
+            self.mobile_interior_vertices.assign(w_interior_initial_values)
+        else:
+            self.mobile_interior_vertices.assign(jnp.ones((dimension, n_nodes)) / n_nodes)
+
+    def call(self, inputs):
+        return self.mobile_interior_vertices
+
+def make_special_model(n_nodes, dimension, w_interior_initial_values):
+    L = special_layer(n_nodes, dimension, w_interior_initial_values)
+    xvals = keras.layers.Input(shape=(1,), name='x_input',dtype=dtype)
+    output = L(xvals)
+    model = keras.Model(inputs=xvals, outputs=output, name='model')
+    return model
 
 ## Define an approximate solution (u_nn): A neural network model
 def make_model(neurons, n_layers, n_output, activation='tanh'):
