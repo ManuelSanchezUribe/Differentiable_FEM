@@ -27,9 +27,15 @@ def element_stiffness(h):
 
 def element_load(coords):
     x1, x2 = coords
-    midpoint = (x1 + x2) / 2
+    p1 = -1/jnp.sqrt(3)
+    p2 = 1/jnp.sqrt(3)
+    pt1 = (x2 - x1) * p1 / 2 + (x2 + x1) / 2
+    pt2 = (x2 - x1) * p2 / 2 + (x2 + x1) / 2
+    phiatpt1 = (p2+1)/2
+    phiatpt2 = (1+p1)/2
+    #midpoint = (x1 + x2) / 2
     h = x2 - x1
-    return h * jnp.array([f(midpoint), f(midpoint)]) / 2
+    return h * jnp.array([f(pt1)*phiatpt1 + f(pt2)*phiatpt2, f(pt1)*phiatpt2 + f(pt2)*phiatpt1]) / 2
 
 # Assemble global stiffness matrix and load vector
 def assemble():
