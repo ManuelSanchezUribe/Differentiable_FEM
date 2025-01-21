@@ -1,15 +1,4 @@
 # -*- coding: utf-8 -*-
-'''
-Created on Oct 2023
-
-@authors:   Jamie Taylor (CUNEF)
-            Manuela Bastidas (UPV/EHU)
-            Tomas Teijeiro (BCAM)
-            https://www.mathmode.science/
-            
-Updated on Jan 2025 by:
-    Ángel Javier Omella
-'''
 
 # This code presents a simple implementation of Physics-Informed
 # Neural Networks (PINNs) as a collocation method. -- <50 lines of PINNS--
@@ -186,123 +175,68 @@ def tricky_loss(y_pred, y_true):
 # =============================================================================
 
 # Number of neurons per hidden layer in the neural network
-nn = 32
-# Number of hidden layers
-nl = 4
-# Number of output neurons
-n_output = 32
+nn = int(2**5)
+
 # Number of training iterations
-iterations = 5000
+iterations = 10000
 
-# # Initialize the neural network model for the approximate solution
-# model = make_special_model(nn)
+# Initialize the neural network model for the approximate solution
+model = make_special_model(nn)
 
-# init_nodes = model(jnp.array([1]))
+init_nodes = model(jnp.array([1]))
 
-# # Big model including the  loss
-# loss_model = make_loss_model(model)
+# Big model including the  loss
+loss_model = make_loss_model(model)
 
-# # Optimizer (Adam optimizer with a specific learning rate)
-# optimizer = keras.optimizers.Adam(learning_rate=1e-2)
+# Optimizer (Adam optimizer with a specific learning rate)
+optimizer = keras.optimizers.Adam(learning_rate=1e-2)
 
-# # Compile the loss model with a custom loss function (tricky_loss)
-# loss_model.compile(optimizer=optimizer, loss=tricky_loss)
+# Adatative learning rate
+def lr_schedule(epoch, lr):
+    if epoch >= 5000:
+        return 1e-3
+    return lr
+lr_scheduler = keras.callbacks.LearningRateScheduler(lr_schedule)
 
-# # Train the model using a single training data point ([1.], [1.]) for a
-# # specified number of epochs (iterations)
-# history = loss_model.fit(jnp.array([1.]), jnp.array([1.]), epochs=iterations)
+# Compile the loss model with a custom loss function (tricky_loss)
+loss_model.compile(optimizer=optimizer, loss=tricky_loss)
 
-
-# #Plot loss history
-# plt.figure()
-# plt.plot(history.history['loss'])
-# # plt.savefig('loss.png')
-
-# # # Define the problem domain and mesh
-# # n_elements = 10  # Number of elements
-# # n_nodes = n_elements + 1
-
-# # # Run the solver
-# # theta = jax.random.uniform(key=jax.random.PRNGKey(10),shape=(1,n_nodes))
-
-# # # node_coords, u = solve(theta)
-
-# node_coords, u = solve(model(jnp.array([1])))
-# init_coords, o = solve(init_nodes)
+# Train the model using a single training data point ([1.], [1.]) for a
+# specified number of epochs (iterations)
+history = loss_model.fit(jnp.array([1.]), jnp.array([1.]), epochs=iterations, callbacks = [lr_scheduler])
 
 
-# # # Output results
-# print("Node coordinates:", node_coords)
-# # print("Solution u:", u)
-# # print(val)
+#Plot loss history
+plt.figure()
+plt.plot(history.history['loss'])
+# plt.savefig('loss.png')
 
-# import matplotlib.pyplot as plt
-# from matplotlib import rcParams
+# # node_coords, u = solve(theta)
 
-
-# # # rcParams['font.family'] = 'serif'
-# # # rcParams['font.size'] = 18
-# # # rcParams['legend.fontsize'] = 17
-# # # rcParams['mathtext.fontset'] = 'cm'
-# # # rcParams['axes.labelsize'] = 19
+node_coords, u = solve(model(jnp.array([1])))
+init_coords, o = solve(init_nodes)
 
 
-# # # # Generate a list of x values for visualization
-# # # xlist = node_coords
+# # Output results
+print("Node coordinates:", node_coords)
+# print("Solution u:", u)
+# print(val)
 
-# # # ## ---------
-# # # # SOLUTION
-# # ## ---------
 
-# # fig, ax = plt.subplots()
-# # # Plot the approximate solution obtained from the trained model
-# plt.figure()
-# plt.plot(node_coords, u,'o--', color='b')
-# plt.plot(node_coords, np.zeros(len(node_coords)),'o', color='r')
-# plt.plot(init_coords, np.zeros(len(node_coords)),'o', color='k')
-# plt.legend(['u', 'nodes', 'initial nodes'])
+# ## ---------
+# # SOLUTION
+## ---------
 
-# plt.grid(which = 'both', axis = 'both', linestyle = ':', color = 'gray')
-# plt.tight_layout()
+# fig, ax = plt.subplots()
+# # Plot the approximate solution obtained from the trained model
+plt.figure()
+plt.plot(node_coords, u,'o--', color='b')
+plt.plot(node_coords, np.zeros(len(node_coords)),'o', color='r')
+plt.plot(init_coords, np.zeros(len(node_coords)),'o', color='k')
+plt.legend(['u', 'nodes', 'initial nodes'])
 
-# # plt.savefig('plot.png')
-# plt.show()
+plt.grid(which = 'both', axis = 'both', linestyle = ':', color = 'gray')
+plt.tight_layout()
 
-######################################################
-################ Save results ########################
-######################################################
-
-orders = [2,3,4,5,6]
-
-save_coords = []
-for i in orders:
-    nn = 2**i
-
-    # Initialize the neural network model for the approximate solution
-    model = make_special_model(int(nn))
-
-    # Big model including the  loss
-    loss_model = make_loss_model(model)
-
-    # Optimizer (Adam optimizer with a specific learning rate)
-    optimizer = keras.optimizers.Adam(learning_rate=1e-2)
-
-    # Compile the loss model with a custom loss function (tricky_loss)
-    loss_model.compile(optimizer=optimizer, loss=tricky_loss)
-
-    # Train the model using a single training data point ([1.], [1.]) for a
-    # specified number of epochs (iterations)
-    history = loss_model.fit(jnp.array([1.]), jnp.array([1.]), epochs=iterations)
-
-    # Coordenates
-    node_coords, u = solve(model(jnp.array([1])))
-
-    # Save node_coords
-    save_coords.append(node_coords)
-
-# Save list in csv file
-import csv
-with open('save_coords.csv', mode='w', newline='') as file:
-    writer = csv.writer(file)
-    for coords in save_coords:
-        writer.writerow(coords)
+# plt.savefig('plot.png')
+plt.show()
