@@ -174,6 +174,7 @@ def tricky_loss(y_pred, y_true):
 #
 # =============================================================================
 
+
 # Number of neurons per hidden layer in the neural network
 nn = int(2**5)
 

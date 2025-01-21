@@ -154,6 +154,7 @@ def solve_and_loss(theta):
     return loss
 
 
+
 # # Define the problem domain and mesh
 # n_elements = 10  # Number of elements
 # n_nodes = n_elements + 1
