@@ -205,7 +205,6 @@ loss_model.compile(optimizer=optimizer, loss=tricky_loss)
 # specified number of epochs (iterations)
 history = loss_model.fit(jnp.array([1.]), jnp.array([1.]), epochs=iterations, callbacks = [lr_scheduler])
 
-
 # #Plot loss history
 plt.figure()
 plt.plot(history.history['loss'])
