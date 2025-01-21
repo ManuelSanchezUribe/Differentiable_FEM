@@ -14,8 +14,9 @@ def softmax_nodes(params):
     # print(paa)
     # Compute the cumulative sum of the softmax values
     cumulative_sum = jnp.cumsum(softmax_values)
+    cumulative_sum_with_zero = jnp.insert(cumulative_sum, 0, 0)
 
-    return cumulative_sum
+    return cumulative_sum_with_zero
 
 # Define source function f(x)
 # def f(x):
@@ -97,7 +98,7 @@ def apply_boundary_conditions(K, F):
 
 # Solve the system
 def solve(theta):
-    n_nodes = theta.shape[1]
+    n_nodes = theta.shape[1] + 1
     n_elements = n_nodes - 1
     node_coords = softmax_nodes(theta)
     element_length = node_coords[1:] - node_coords[:-1]
@@ -114,7 +115,7 @@ def solve_and_loss(theta):
     bc_g0 = problem_test.g0
     bc_g1 = problem_test.g1
 
-    n_nodes = theta.shape[1]
+    n_nodes = theta.shape[1] + 1
     n_elements = n_nodes - 1
     node_coords = softmax_nodes(theta)
     element_length = node_coords[1:] - node_coords[:-1]
