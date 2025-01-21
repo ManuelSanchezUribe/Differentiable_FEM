@@ -36,8 +36,18 @@ def assemble(n_elements, node_coords, element_length, n_nodes):
 
     ke_values = jax.vmap(element_stiffness)(h_values)
 
-    for i in range(n_elements):
-        values = values.at[0, (3*(i)):(3*(i)+4)].add(ke_values[i,:,:].flatten())
+    # Compute the indices for vectorized updates
+    indices = jnp.arange(n_elements)  # Array of element indices
+    flat_indices = (3 * indices[:, None] + jnp.arange(4)).reshape(-1)  # Compute flattened indices
+
+    # Flatten ke_values to match flat_indices
+    flattened_ke_values = ke_values.reshape(-1)
+
+    # Perform the update in a vectorized manner
+    values = values.at[0, flat_indices].add(flattened_ke_values)
+
+    # for i in range(n_elements):
+    #     values = values.at[0, (3*(i)):(3*(i)+4)].add(ke_values[i,:,:].flatten())
 
     # fe_values = jax.vmap(element_load)(coords)
 
