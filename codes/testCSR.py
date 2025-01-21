@@ -40,10 +40,14 @@ def assemble(n_elements, node_coords, element_length, n_nodes):
 
     # Mask out invalid elements and flatten
     valid_values = jnp.where(valid_mask, range_matrix, -1)
-    concatenated = valid_values[valid_values != -1]  # Remove invalid (-1) elements
+    # print(valid_values)
+    # print(valid_values[1:])
+    # concatenated = valid_values[valid_values != -1]  # Remove invalid (-1) elements
 
     # Append the final elements
-    cols = jnp.append(concatenated, jnp.array([n_nodes - 2, n_nodes - 1]))
+    cols = jnp.array([0,1])
+    cols = jnp.append(cols, valid_values[1:])
+    cols = jnp.append(cols, jnp.array([n_nodes - 2, n_nodes - 1]))
 
 
     element_nodes = jnp.array([[i, i + 1] for i in range(n_elements)])
