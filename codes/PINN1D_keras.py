@@ -126,7 +126,7 @@ class loss(keras.layers.Layer):
 
         theta = self.model(jnp.array([1]))
         loss = solve_and_loss(theta)
-        return  loss
+        return loss
 
 
 ## Create a loss model
@@ -206,7 +206,7 @@ loss_model.compile(optimizer=optimizer, loss=tricky_loss)
 history = loss_model.fit(jnp.array([1.]), jnp.array([1.]), epochs=iterations, callbacks = [lr_scheduler])
 
 
-#Plot loss history
+# #Plot loss history
 plt.figure()
 plt.plot(history.history['loss'])
 # plt.savefig('loss.png')
@@ -217,10 +217,10 @@ node_coords, u = solve(model(jnp.array([1])))
 init_coords, o = solve(init_nodes)
 
 
-# # Output results
-print("Node coordinates:", node_coords)
-# print("Solution u:", u)
-# print(val)
+# # # Output results
+# print("Node coordinates:", node_coords)
+# # print("Solution u:", u)
+# # print(val)
 
 
 # ## ---------
