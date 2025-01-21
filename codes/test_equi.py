@@ -7,7 +7,7 @@ problem_number=2
 
 # Element stiffness matrix and load vector
 def element_stiffness(h):
-    return jnp.array([[1, -1], [-1, 1]]) / h
+    return jnp.array([[1, -1], [-1, 1]], dtype=jnp.float64) / h
 
 def element_load(coords):
     x1, x2 = coords
@@ -21,7 +21,7 @@ def element_load(coords):
     h = x2 - x1
     problem_test = problem(problem_number)
     f = problem_test.f
-    return h * jnp.array([f(pt1)*phiatpt1 + f(pt2)*phiatpt2, f(pt1)*phiatpt2 + f(pt2)*phiatpt1]) / 2
+    return h * jnp.array([f(pt1)*phiatpt1 + f(pt2)*phiatpt2, f(pt1)*phiatpt2 + f(pt2)*phiatpt1], dtype=jnp.float64) / 2
 
 # Assemble global stiffness matrix and load vector
 def assemble(n_elements, node_coords, element_length, n_nodes):
@@ -54,7 +54,7 @@ def apply_boundary_conditions(K, F):
     # bc_g1 = g1()
 
     F = F - K[:, 0] * bc_g0
-    F = F - K[:, -1] * bc_g1
+    # F = F - K[:, -1] * bc_g1
 
     K = K.at[0, :].set(0)
     K = K.at[:, 0].set(0)
@@ -78,6 +78,25 @@ def solve(nelem):
     n_nodes = nelem + 1
     n_elements = nelem
     node_coords = jnp.linspace(0, 1, n_nodes)
+    element_length = node_coords[1:] - node_coords[:-1]
+
+    K, F = assemble(n_elements, node_coords, element_length, n_nodes)
+    K, F = apply_boundary_conditions(K, F)
+    # u = jnp.linalg.solve(K, F) - (bc_g0*(1-node_coords) + bc_g1*(node_coords-0))
+    u = jnp.linalg.solve(K, F)
+    loss = 0.5*jnp.dot(u, jnp.dot(K, u)) - jnp.dot(F, u)
+
+    return loss
+
+# Solve the system
+def solve_array(node_coords):
+    problem_test = problem(problem_number)
+    bc_g0 = problem_test.g0
+    bc_g1 = problem_test.g1
+
+    n_nodes = node_coords.size 
+    n_elements = n_nodes - 1
+    # node_coords = jnp.linspace(0, 1, n_nodes)
     element_length = node_coords[1:] - node_coords[:-1]
 
     K, F = assemble(n_elements, node_coords, element_length, n_nodes)
@@ -149,10 +168,47 @@ def problem(problem_number):
     return Elliptic1D(**data)
 
 
-
-Nelem = 2**(jnp.arange(0,7))
+import matplotlib.pyplot as plt
+import numpy as np
+Nelem = 2**(jnp.arange(2,9))+1
+FEMerr = []
+rate = []
 for i, nelem in enumerate(Nelem):
     # print(nelem)
     loss = solve(nelem)
-    print(loss)
-    print(jnp.abs(-0.6125-loss))
+    # print(loss)
+    FEMerr.append(np.sqrt(2*jnp.abs(-0.6125-loss))*100/(0.49/0.4))
+    if i>0:
+        rate.append(np.log(FEMerr[-1]/FEMerr[-2])/np.log(Nelem[i-1]/Nelem[i]))
+
+plt.loglog(Nelem,FEMerr,'o-')
+plt.savefig('FEMlogN.png')
+# print(FEMerr)
+print(rate)
+
+import csv
+list_of_arrays = []
+with open('save_coords.csv', 'r') as archive:
+    reader = csv.reader(archive)
+
+    for row in reader:
+        list_of_arrays.append(list(map(float,row)))
+
+
+NNerr = []
+rate = []
+for i, nelem in enumerate(Nelem):
+    # print(nelem)
+
+    # print(jnp.array(list_of_arrays[i]))
+    coords = jnp.array(list_of_arrays[i])
+    # print(Nelem[i], coords.size)
+    loss = solve_array(coords)
+    # print(loss)
+    NNerr.append(np.sqrt(2*jnp.abs(-0.6125-loss))*100/(0.49/0.4))
+    if i>0:
+        rate.append(np.log(NNerr[-1]/NNerr[-2])/np.log(Nelem[i-1]/Nelem[i]))
+
+plt.loglog(Nelem,NNerr,'o-')
+plt.savefig('NNlogN.png')
+print(rate)
