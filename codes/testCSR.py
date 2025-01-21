@@ -24,10 +24,26 @@ def element_stiffness(h):
 def assemble(n_elements, node_coords, element_length, n_nodes):
     lenval = 3*(n_nodes-2) + 4
     values = jnp.zeros((1,lenval))
-    rows = jnp.zeros((1,n_nodes+1))
-    cols = jnp.zeros((1,lenval))
+    # rows =  jnp.append(3 * jnp.arange(n_nodes) - jnp.arange(n_nodes) % 2,n_nodes*3-1)
+    rows = 3 * jnp.arange(n_nodes+1) - 1
+    rows = rows.at[0].set(0)
+    rows = rows.at[-1].add(-1)
+    # cols = jnp.append(jnp.concatenate([jnp.arange(max([0,i-1]),min(i+2, n_nodes)) for i in range(n_nodes-1)]),jnp.array([n_nodes-2,n_nodes-1]))
 
+    start_indices = jnp.maximum(0, jnp.arange(n_nodes - 1) - 1)
+    end_indices = jnp.minimum(jnp.arange(n_nodes - 1) + 2, n_nodes)
 
+    # Compute ranges for all elements at once
+    max_range = 3  # Maximum possible range size (i.e., 3 elements: i-1, i, i+1)
+    range_matrix = jnp.arange(max_range) + start_indices[:, None]  # Broadcast addition
+    valid_mask = (range_matrix < end_indices[:, None]) & (range_matrix >= start_indices[:, None])
+
+    # Mask out invalid elements and flatten
+    valid_values = jnp.where(valid_mask, range_matrix, -1)
+    concatenated = valid_values[valid_values != -1]  # Remove invalid (-1) elements
+
+    # Append the final elements
+    cols = jnp.append(concatenated, jnp.array([n_nodes - 2, n_nodes - 1]))
 
 
     element_nodes = jnp.array([[i, i + 1] for i in range(n_elements)])
@@ -62,6 +78,6 @@ def assemble(n_elements, node_coords, element_length, n_nodes):
     # F = F.at[element_nodes[:, 0]].add(fe_values[:, 0])
     # F = F.at[element_nodes[:, 1]].add(fe_values[:, 1])
 
-    return values
+    return rows, values, cols
 
 print(assemble(4,jnp.array([0,0.3,0.5,0.9,1.0], dtype=jnp.float64),jnp.array([0.3,0.2,0.4,0.1], dtype=jnp.float64), 5))
