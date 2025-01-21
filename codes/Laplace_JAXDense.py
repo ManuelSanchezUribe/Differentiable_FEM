@@ -23,13 +23,13 @@ def softmax_nodes(params):
 #     # return 0
 #     return 0.7*0.3*x**(-1.3)
 
-# Boundary conditions
-def g0():
-    return 0  # Value of u at x = 0
-    # return 0.5
-def g1():
-    return 0  # Value of u at x = 1
-    # return -0.5
+# # Boundary conditions
+# def g0():
+#     return 0  # Value of u at x = 0
+#     # return 0.5
+# def g1():
+#     return 0  # Value of u at x = 1
+#     # return -0.5
 
 # Element stiffness matrix and load vector
 def element_stiffness(h):
@@ -75,7 +75,7 @@ def assemble(n_elements, node_coords, element_length, n_nodes):
 def apply_boundary_conditions(K, F):
     problem_test = problem(problem_number)
     bc_g0 = problem_test.g0
-    # bc_g1 = problem_test.g1
+    bc_g1 = problem_test.g1
     # bc_g0 = g0()
     # bc_g1 = g1()
 
@@ -95,9 +95,6 @@ def apply_boundary_conditions(K, F):
 
     return K, F
 
-def eval_loss(K,F,u):
-    return 0.5*jnp.dot(u, jnp.dot(K, u)) + jnp.dot(F, u)
-
 # Solve the system
 def solve(theta):
     n_nodes = theta.shape[1]
@@ -113,6 +110,10 @@ def solve(theta):
 
 # Solve the system
 def solve_and_loss(theta):
+    problem_test = problem(problem_number)
+    bc_g0 = problem_test.g0
+    bc_g1 = problem_test.g1
+
     n_nodes = theta.shape[1]
     n_elements = n_nodes - 1
     node_coords = softmax_nodes(theta)
@@ -120,6 +121,7 @@ def solve_and_loss(theta):
 
     K, F = assemble(n_elements, node_coords, element_length, n_nodes)
     K, F = apply_boundary_conditions(K, F)
+    # u = jnp.linalg.solve(K, F) - (bc_g0*(1-node_coords) + bc_g1*(node_coords-0))
     u = jnp.linalg.solve(K, F)
     
     loss = 0.5*jnp.dot(u, jnp.dot(K, u)) - jnp.dot(F, u)
@@ -218,7 +220,7 @@ def problem(problem_number):
         {
             "f": lambda x: 0.7 * 0.3 * x ** (-1.3),  # Singular source term
             "g0": 0,  # Dirichlet boundary condition at x=0
-            "g1": 0,  # Dirichlet boundary condition at x=1
+            "g1": 1,  # Dirichlet boundary condition at x=1
             "sigma": lambda x: 1,  # Constant coefficient sigma(x)
         },
     ]
