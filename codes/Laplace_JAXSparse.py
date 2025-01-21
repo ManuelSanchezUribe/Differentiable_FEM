@@ -105,9 +105,10 @@ def solve(theta):
 
     K, F = assemble(n_elements, node_coords, element_length, n_nodes)
     K, F = apply_boundary_conditions(K, F)
-    K_sparse = sparse.CSR.fromdense(K)
-    u = sparse.linalg.spsolve(K_sparse.data, K_sparse.indices, K_sparse.indptr, F, reorder = 0)
-    # u = jnp.linalg.solve(K, F)
+    # K_sparse = sparse.CSR.fromdense(K)
+    # K_sparse = sparse.csr_fromdense(K)
+    # u = sparse.linalg.spsolve(K_sparse.data, K_sparse.indices, K_sparse.indptr, F, reorder = 0)
+    u = jnp.linalg.solve(K, F)
 
     return node_coords, u
 
@@ -125,8 +126,8 @@ def solve_and_loss(theta):
     K, F = assemble(n_elements, node_coords, element_length, n_nodes)
     K, F = apply_boundary_conditions(K, F)
     # u = jnp.linalg.solve(K, F) - (bc_g0*(1-node_coords) + bc_g1*(node_coords-0))
-    K_sparse = sparse.CSR.fromdense(K)
-
+    # K_sparse = sparse.CSR.fromdense(K)
+    K_sparse = sparse.csr_fromdense(K)
     u  = sparse.linalg.spsolve(K_sparse.data, K_sparse.indices, K_sparse.indptr, F, reorder = 1)
     # u = jnp.linalg.solve(K, F)
     loss = 0.5*jnp.dot(u, jnp.dot(K, u)) - jnp.dot(F, u)
