@@ -55,22 +55,46 @@ def assemble(n_elements, node_coords, element_length, n_nodes):
     element_nodes = jnp.array([[i, i + 1] for i in range(n_elements)])
     coords = node_coords[element_nodes]
     h_values = element_length
+    lenval = 3*(n_nodes-2) + 4
+    values = jnp.zeros((lenval))
 
-    ke_values = jax.vmap(element_stiffness)(h_values)
     fe_values = jax.vmap(element_load)(coords)
+    ke_values = jax.vmap(element_stiffness)(h_values)
 
-    K = jnp.zeros((n_nodes, n_nodes))
+    # Compute the indices for vectorized updates
+    indices = jnp.arange(n_elements)  # Array of element indices
+    flat_indices = (3 * indices[:, None] + jnp.arange(4)).reshape(-1)  # Compute flattened indices
+
+    # Flatten ke_values to match flat_indices
+    flattened_ke_values = ke_values.reshape(-1)
+
+    # Perform the update in a vectorized manner
+    values = values.at[flat_indices].add(flattened_ke_values)
+    values = values.at[1:3].set(0)
+    values = values.at[0].set(1)
+
+    rows = 3 * jnp.arange(n_nodes+1) - 1
+    rows = rows.at[0].set(0)
+    rows = rows.at[-1].add(-1)
+
+    # Suponiendo que 'col' es un array de JAX
+    col = jnp.arange(n_nodes) # n-1
+
+    # Crear A_c con las subarrays especificadas
+    A_c = [col[0:2]] + [col[0:3]] + [col[i-1:i+2] for i in range(2, len(col)-1)] + [col[-2:]]
+
+    # Aplanar la lista de subarrays en un solo array
+    A_c = jnp.concatenate(A_c)
+    K = jax.experimental.sparse.CSR((values, A_c, rows), shape=(n_nodes, n_nodes))
+
     F = jnp.zeros(n_nodes)
-
-    K = K.at[element_nodes[:, 0], element_nodes[:, 0]].add(ke_values[:, 0, 0])
-    K = K.at[element_nodes[:, 0], element_nodes[:, 1]].add(ke_values[:, 0, 1])
-    K = K.at[element_nodes[:, 1], element_nodes[:, 0]].add(ke_values[:, 1, 0])
-    K = K.at[element_nodes[:, 1], element_nodes[:, 1]].add(ke_values[:, 1, 1])
 
     F = F.at[element_nodes[:, 0]].add(fe_values[:, 0])
     F = F.at[element_nodes[:, 1]].add(fe_values[:, 1])
 
     return K, F
+
+
 
 # Apply boundary conditions
 def apply_boundary_conditions(K, F):
@@ -80,14 +104,14 @@ def apply_boundary_conditions(K, F):
     # bc_g0 = g0()
     # bc_g1 = g1()
 
-    F = F - K[:, 0] * bc_g0
+    # F = F - K[:, 0] * bc_g0
     # F = F - K[:, -1] * bc_g1
 
-    K = K.at[0, :].set(0)
-    K = K.at[:, 0].set(0)
+    # K = K.at[0, :].set(0)
+    # K = K.at[:, 0].set(0)
     # K = K.at[-1, :].set(0)
     # K = K.at[:, -1].set(0)
-    K = K.at[0, 0].set(1)
+    # K = K.at[0, 0].set(1)
     # K = K.at[-1, -1].set(1)
 
     F = F.at[0].set(bc_g0)
@@ -105,10 +129,7 @@ def solve(theta):
 
     K, F = assemble(n_elements, node_coords, element_length, n_nodes)
     K, F = apply_boundary_conditions(K, F)
-    # K_sparse = sparse.CSR.fromdense(K)
-    # K_sparse = sparse.csr_fromdense(K)
-    # u = sparse.linalg.spsolve(K_sparse.data, K_sparse.indices, K_sparse.indptr, F, reorder = 0)
-    u = jnp.linalg.solve(K, F)
+    u  = sparse.linalg.spsolve(K.data, K.indices, K.indptr, F, reorder = 0)
 
     return node_coords, u
 
@@ -125,12 +146,11 @@ def solve_and_loss(theta):
 
     K, F = assemble(n_elements, node_coords, element_length, n_nodes)
     K, F = apply_boundary_conditions(K, F)
-    # u = jnp.linalg.solve(K, F) - (bc_g0*(1-node_coords) + bc_g1*(node_coords-0))
-    # K_sparse = sparse.CSR.fromdense(K)
-    K_sparse = sparse.csr_fromdense(K)
-    u  = sparse.linalg.spsolve(K_sparse.data, K_sparse.indices, K_sparse.indptr, F, reorder = 1)
+    
+    u  = sparse.linalg.spsolve(K.data, K.indices, K.indptr, F, reorder = 0)
     # u = jnp.linalg.solve(K, F)
-    loss = 0.5*jnp.dot(u, jnp.dot(K, u)) - jnp.dot(F, u)
+    loss = 0.5 * u @ (K @ u) - F @ u
+    # loss = 0.5*jnp.dot(u, jnp.dot(K, u)) - jnp.dot(F, u)
     return loss
 
 

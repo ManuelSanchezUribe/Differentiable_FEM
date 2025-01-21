@@ -178,7 +178,7 @@ def tricky_loss(y_pred, y_true):
 nn = int(2**5)
 
 # Number of training iterations
-iterations = 10000
+iterations = 5000
 
 # Initialize the neural network model for the approximate solution
 model = make_special_model(nn)
