@@ -11,13 +11,14 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.tri as tri
 import os
 
 os.environ["KERAS_BACKEND"] = "jax"
 
 import keras
 
-from Laplace_JAXSparse import solve_and_loss, solve
+from Laplace_JAXSparse2D import solve_and_loss, solve
 
 # Set the random seed
 np.random.seed(1234)
@@ -55,6 +56,7 @@ def make_model(n_nodes, dimension=1, w_interior_initial_values=None):
     model = keras.Model(inputs=xvals, outputs=output, name='model')
     return model
 
+##PINNs loss function ( loss into layer )
 class loss(keras.layers.Layer):
     def __init__(self,model,**kwargs):
 
@@ -89,6 +91,8 @@ class loss(keras.layers.Layer):
         loss = solve_and_loss(theta)
         return loss
 
+
+## Create a loss model
 def make_loss_model(model):
     """
     Constructs a loss model for PINNs.
@@ -105,10 +109,12 @@ def make_loss_model(model):
     # Compute the loss using the provided neural network and
     # integration parameters
     output = loss(model)(xvals)
+    # output = loss_dummy(model)(xvals)
     # Create a Keras model for the loss
     loss_model = keras.Model(inputs=xvals, outputs=output)
 
     return loss_model
+
 
 def tricky_loss(y_pred, y_true):
     """
@@ -127,63 +133,71 @@ def tricky_loss(y_pred, y_true):
 
 # =============================================================================
 #
-#          TRAINING 
+#          Example 1 - Inputs
 #
 # =============================================================================
 
 
-# Number of neurons per hidden layer in the neural network
-nn = 30000
+# # Number of neurons per hidden layer in the neural network
+# nn = int(2 * 2**5) # Two times the number of neurons 
 
-# Number of training iterations
-iterations = 1000
+# # Number of training iterations
+# iterations = 5000
 
-# Initialize the neural network model for the approximate solution
-model = make_model(nn)
+# # Initialize the neural network model for the approximate solution
+# model = make_model(nn)
 
-init_nodes = model(jnp.array([1]))
+# init_nodes = model(jnp.array([1]))
 
-# Big model including the  loss
-loss_model = make_loss_model(model)
+# # Big model including the  loss
+# loss_model = make_loss_model(model)
 
-# Optimizer (Adam optimizer with a specific learning rate)
-optimizer = keras.optimizers.Adam(learning_rate=1e-2)
+# # Optimizer (Adam optimizer with a specific learning rate)
+# optimizer = keras.optimizers.Adam(learning_rate=1e-2)
 
-# Adatative learning rate
-def lr_schedule(epoch, lr):
-    if epoch >= 5000:
-        return 1e-3
-    return lr
-lr_scheduler = keras.callbacks.LearningRateScheduler(lr_schedule)
+# # Adatative learning rate
+# def lr_schedule(epoch, lr):
+#     if epoch >= 5000:
+#         return 1e-3
+#     return lr
+# lr_scheduler = keras.callbacks.LearningRateScheduler(lr_schedule)
 
-# Compile the loss model with a custom loss function (tricky_loss)
-loss_model.compile(optimizer=optimizer, loss=tricky_loss)
+# # Compile the loss model with a custom loss function (tricky_loss)
+# loss_model.compile(optimizer=optimizer, loss=tricky_loss)
 
-# Train the model
-history = loss_model.fit(jnp.array([1.]), jnp.array([1.]), epochs=iterations, callbacks = [lr_scheduler])
+# # Train the model using a single training data point ([1.], [1.]) for a
+# # specified number of epochs (iterations)
+# history = loss_model.fit(jnp.array([1.]), jnp.array([1.]), epochs=iterations, callbacks = [lr_scheduler])
 
-# #Plot loss history
-plt.figure()
-plt.plot(history.history['loss'])
-# plt.savefig('loss.png')
+# # #Plot loss history
+# plt.figure()
+# plt.plot(history.history['loss'])
+# # plt.savefig('loss.png')
 
-node_coords, u = solve(model(jnp.array([1])))
-init_coords, o = solve(init_nodes)
+# # # node_coords, u = solve(theta)
 
+# node_coords, u = solve(model(jnp.array([1])))
+# init_coords, o = solve(init_nodes)
+
+
+# # # # Output results
+# # print("Node coordinates:", node_coords)
+# # # print("Solution u:", u)
+# # # print(val)
+
+
+# # ## ---------
+# # # SOLUTION
 # ## ---------
-# # SOLUTION
-## ---------
+# # Crear el triángulo para el trazado
+# triangulation = tri.Triangulation(node_coords[:, 0], node_coords[:, 1])
 
-# fig, ax = plt.subplots()
-# # Plot the approximate solution obtained from the trained model
-plt.figure()
-plt.plot(node_coords, u,'o--', color='b')
-plt.plot(node_coords, np.zeros(len(node_coords)),'o', color='r')
-plt.plot(init_coords, np.zeros(len(node_coords)),'o', color='k')
-plt.legend(['u', 'nodes', 'initial nodes'])
-
-plt.grid(which = 'both', axis = 'both', linestyle = ':', color = 'gray')
-plt.tight_layout()
-
-# plt.savefig('plot.png')
-plt.show()
+# # Graficar el resultado
+# plt.figure(figsize=(8, 6))
+# plt.tricontourf(triangulation, u, cmap='viridis')
+# plt.colorbar(label='u (Solución)')
+# plt.title('Resultados de elementos finitos en 2D')
+# plt.xlabel('x')
+# plt.ylabel('y')
+# plt.axis('equal')  # Mantener proporciones
+# plt.show()
