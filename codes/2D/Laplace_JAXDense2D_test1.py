@@ -121,37 +121,43 @@ def load_vector(coords, elements):
 
 
 # Apply boundary conditions
-def apply_boundary_conditions(K, F):
+def apply_boundary_conditions(K, F, dirichlet_nodes):
     problem_test = problem(problem_number)
-    bc_g0 = problem_test.g0
-    bc_g1 = problem_test.g1
-    # bc_g0 = g0()
-    # bc_g1 = g1()
 
-    F = F - K[:, 0] * bc_g0
+    # F = F - K[:, 0] * bc_g0
     # F = F - K[:, -1] * bc_g1
 
-    K = K.at[0, :].set(0)
-    K = K.at[:, 0].set(0)
+    K = K.at[dirichlet_nodes, :].set(0)
+    K = K.at[:, dirichlet_nodes].set(0)
     # K = K.at[-1, :].set(0)
     # K = K.at[:, -1].set(0)
-    K = K.at[0, 0].set(1)
+    K = K.at[dirichlet_nodes, dirichlet_nodes].set(1)
     # K = K.at[-1, -1].set(1)
 
-    F = F.at[0].set(bc_g0)
+    F = F.at[dirichlet_nodes].set(0)
     # F = F.at[-1].set(bc_g1)
-    F = F.at[-1].set(F[-1]+0.7)
+    # F = F.at[-1].set(F[-1]+0.7)
 
-    return K, F
+    return K
 
 # Solve the system
 def solve(theta):
     nx = int(theta.shape[1]/2)
     ny = nx
-    node_coords_x, node_coords_y  = softmax_nodes(theta)
+    
+    # node_coords_x, node_coords_y  = softmax_nodes(theta)
+    node_coords_x = jnp.linspace(0, 1, nx)
+    node_coords_y = jnp.linspace(0, 1, ny)
     coords, elements = generate_mesh(nx, ny, node_coords_x, node_coords_y)
     n_elements = elements.shape[0]
     n_nodes = coords.shape[0]
+
+    coords, elements = generate_mesh(nx, ny, 0, 1, 0, 1)
+    dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
+    neumann_nodes = jnp.append(nx*jnp.arange(1,ny)-1, jnp.arange((ny-1)*nx, ny*nx))
+
+    dirichlet_nodes = jnp.append(dirichlet_nodes, neumann_nodes)
+    dirichlet_nodes = jnp.unique(dirichlet_nodes)
 
     element_length = jnp.zeros((n_elements, 2))
 
@@ -163,7 +169,7 @@ def solve(theta):
     K = assemble_stiffness(n_elements, elements, element_length, n_nodes)
     F = load_vector(coords, elements)
 
-    K, F = apply_boundary_conditions(K, F)
+    K = apply_boundary_conditions(K, F, dirichlet_nodes)
     u = jnp.linalg.solve(K, F)
 
     return coords, u
@@ -172,8 +178,16 @@ def solve(theta):
 def solve_and_loss(theta):
     nx = int(theta.shape[1]/2)
     ny = nx
-    node_coords_x, node_coords_y  = softmax_nodes(theta)
+    # node_coords_x, node_coords_y  = softmax_nodes(theta)
+    node_coords_x = jnp.linspace(0, 1, nx)
+    node_coords_y = jnp.linspace(0, 1, ny)
     coords, elements = generate_mesh(nx, ny, node_coords_x, node_coords_y)
+    dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
+    neumann_nodes = jnp.append(nx*jnp.arange(1,ny)-1, jnp.arange((ny-1)*nx, ny*nx))
+
+    dirichlet_nodes = jnp.append(dirichlet_nodes, neumann_nodes)
+    dirichlet_nodes = jnp.unique(dirichlet_nodes)
+
     n_elements = elements.shape[0]
     n_nodes = coords.shape[0]
 
@@ -187,14 +201,14 @@ def solve_and_loss(theta):
     K = assemble_stiffness(n_elements, elements, element_length, n_nodes)
     F = load_vector(coords, elements)
 
-    K, F = apply_boundary_conditions(K, F)
+    K = apply_boundary_conditions(K, F, dirichlet_nodes)
     u = jnp.linalg.solve(K, F)
     
     loss = 0.5*jnp.dot(u, jnp.dot(K, u)) - jnp.dot(F, u)
 
     return loss
 
-
+print(solve_and_loss(jnp.zeros((20))))
 # # Define the problem domain and mesh
 # n_elements = 10  # Number of elements
 # n_nodes = n_elements + 1
@@ -241,7 +255,7 @@ def solve_and_loss(theta):
 # plt.show()
 
 class Elliptic1D:
-    def __init__(self, f, g0, g1, sigma, u=None):
+    def __init__(self, f, g0, g1, sigma, ritz_value, u=None):
         """
         Initializes the 1D elliptic problem.
 
@@ -258,6 +272,7 @@ class Elliptic1D:
         self.g0 = g0
         self.g1 = g1
         self.sigma = sigma
+        self.ritz_value = ritz_value
         self.u = u  # Analytical solution, if provided
 
 def problem(problem_number):
@@ -275,7 +290,8 @@ def problem(problem_number):
             "f": lambda x, y: 2*jnp.pi**2*jnp.sin(jnp.pi*x)*jnp.sin(jnp.pi*y),  # Zero source term
             "gu": lambda x, y:jnp.pi*jnp.cos(jnp.pi*y)*jnp.sin(jnp.pi*x),  # Neumman Boundary condition for y = 1
             "gr": lambda x, y:jnp.pi*jnp.cos(jnp.pi*x)*jnp.sin(jnp.pi*y),  # Neumman Boundary condition for x = 1
-            "sigma": lambda x, y: 1,  # Constant coefficient sigma(x)
+            "sigma": lambda x, y: 1,  # Constant coefficient sigma(x),
+            "ritz_value": -0.25
         },
     ]
 
