@@ -2,10 +2,12 @@ import jax
 import jax.numpy as jnp
 from jax import jit
 import jax.experimental.sparse as sparse
+from functools import partial
 
 global problem_number
 problem_number=2
 
+@jit
 def softmax_nodes(params):
     # Compute the softmax values
     softmax_values = jax.nn.softmax(params)
@@ -18,24 +20,11 @@ def softmax_nodes(params):
 
     return cumulative_sum_with_zero
 
-# Define source function f(x)
-# def f(x):
-#     # return 0.7*0.3*x**(-1.3) + 1.7*0.7*x**(-0.3)
-#     # return 0
-#     return 0.7*0.3*x**(-1.3)
-
-# # Boundary conditions
-# def g0():
-#     return 0  # Value of u at x = 0
-#     # return 0.5
-# def g1():
-#     return 0  # Value of u at x = 1
-#     # return -0.5
-
-# Element stiffness matrix and load vector
+@jit
 def element_stiffness(h):
     return jnp.array([[1, -1], [-1, 1]]) / h
 
+@jit
 def element_load(coords):
     x1, x2 = coords
     p1 = -1/jnp.sqrt(3)
@@ -51,12 +40,13 @@ def element_load(coords):
     return h * jnp.array([f(pt1)*phiatpt1 + f(pt2)*phiatpt2, f(pt1)*phiatpt2 + f(pt2)*phiatpt1]) / 2
 
 # Assemble global stiffness matrix and load vector
+@partial(jax.jit, static_argnames=['n_elements', 'n_nodes'])
 def assemble(n_elements, node_coords, element_length, n_nodes):
-    element_nodes = jnp.array([[i, i + 1] for i in range(n_elements)])
-    coords = node_coords[element_nodes]
-    h_values = element_length
-    lenval = 3*(n_nodes-2) + 4
-    values = jnp.zeros((lenval))
+    element_nodes = jnp.stack((jnp.arange(0, n_elements), jnp.arange(1, n_elements+1)), axis=1) 
+    coords        = node_coords[element_nodes]
+    h_values      = element_length
+    lenval        = 3*(n_nodes-2) + 4
+    values        = jnp.zeros((lenval))
 
     fe_values = jax.vmap(element_load)(coords)
     ke_values = jax.vmap(element_stiffness)(h_values)
@@ -77,15 +67,22 @@ def assemble(n_elements, node_coords, element_length, n_nodes):
     rows = rows.at[0].set(0)
     rows = rows.at[-1].add(-1)
 
-    # Suponiendo que 'col' es un array de JAX
-    col = jnp.arange(n_nodes) # n-1
+    start_indices = jnp.maximum(0, jnp.arange(n_nodes - 1) - 1)
+    end_indices = jnp.minimum(jnp.arange(n_nodes - 1) + 2, n_nodes)
 
-    # Crear A_c con las subarrays especificadas
-    A_c = [col[0:2]] + [col[0:3]] + [col[i-1:i+2] for i in range(2, len(col)-1)] + [col[-2:]]
+    # Compute ranges for all elements at once
+    max_range = 3  # Maximum possible range size (i.e., 3 elements: i-1, i, i+1)
+    range_matrix = jnp.arange(max_range) + start_indices[:, None]  # Broadcast addition
+    valid_mask = (range_matrix < end_indices[:, None]) & (range_matrix >= start_indices[:, None])
 
-    # Aplanar la lista de subarrays en un solo array
-    A_c = jnp.concatenate(A_c)
-    K = jax.experimental.sparse.CSR((values, A_c, rows), shape=(n_nodes, n_nodes))
+    # Mask out invalid elements and flatten
+    valid_values = jnp.where(valid_mask, range_matrix, -1)
+
+    # Append the final elements
+    cols = jnp.array([0,1])
+    cols = jnp.append(cols, valid_values[1:])
+    cols = jnp.append(cols, jnp.array([n_nodes - 2, n_nodes - 1]))
+    K    = jax.experimental.sparse.CSR((values, cols, rows), shape=(n_nodes, n_nodes))
 
     F = jnp.zeros(n_nodes)
 
@@ -94,9 +91,8 @@ def assemble(n_elements, node_coords, element_length, n_nodes):
 
     return K, F
 
-
-
 # Apply boundary conditions
+@jit
 def apply_boundary_conditions(K, F):
     problem_test = problem(problem_number)
     bc_g0 = problem_test.g0
@@ -121,6 +117,7 @@ def apply_boundary_conditions(K, F):
     return K, F
 
 # Solve the system
+
 def solve(theta):
     n_nodes = theta.shape[1] + 1
     n_elements = n_nodes - 1
@@ -134,6 +131,7 @@ def solve(theta):
     return node_coords, u
 
 # Solve the system
+@jit
 def solve_and_loss(theta):
     problem_test = problem(problem_number)
     bc_g0 = problem_test.g0
@@ -148,57 +146,9 @@ def solve_and_loss(theta):
     K, F = apply_boundary_conditions(K, F)
     
     u  = sparse.linalg.spsolve(K.data, K.indices, K.indptr, F, reorder = 0)
-    # u = jnp.linalg.solve(K, F)
     loss = 0.5 * u @ (K @ u) - F @ u
-    # loss = 0.5*jnp.dot(u, jnp.dot(K, u)) - jnp.dot(F, u)
     return loss
 
-
-
-# # Define the problem domain and mesh
-# n_elements = 10  # Number of elements
-# n_nodes = n_elements + 1
-
-# # Run the solver
-# theta = jax.random.uniform(key=jax.random.PRNGKey(10),shape=(1,n_nodes))
-
-# # node_coords, u = solve(theta)
-# node_coords, u, val = solve_and_loss(theta)
-
-# # # Output results
-# # print("Node coordinates:", node_coords)
-# # print("Solution u:", u)
-# print(val)
-
-# import matplotlib.pyplot as plt
-# from matplotlib import rcParams
-
-
-# # rcParams['font.family'] = 'serif'
-# # rcParams['font.size'] = 18
-# # rcParams['legend.fontsize'] = 17
-# # rcParams['mathtext.fontset'] = 'cm'
-# # rcParams['axes.labelsize'] = 19
-
-
-# # # Generate a list of x values for visualization
-# # xlist = node_coords
-
-# # ## ---------
-# # # SOLUTION
-# ## ---------
-
-# fig, ax = plt.subplots()
-# # Plot the approximate solution obtained from the trained model
-# plt.plot(node_coords, u, color='b')
-
-# plt.legend(['u_approx', 'u_exact'])
-
-# ax.grid(which = 'both', axis = 'both', linestyle = ':', color = 'gray')
-# plt.tight_layout()
-
-# plt.savefig('plot.png')
-# plt.show()
 
 class Elliptic1D:
     def __init__(self, f, g0, g1, sigma, u=None):

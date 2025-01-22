@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 from jax import jit
 import keras
+from functools import partial
 
 global problem_number
 problem_number=2
@@ -51,8 +52,9 @@ def element_load(coords):
     return h * jnp.array([f(pt1)*phiatpt1 + f(pt2)*phiatpt2, f(pt1)*phiatpt2 + f(pt2)*phiatpt1]) / 2
 
 # Assemble global stiffness matrix and load vector
+@partial(jax.jit, static_argnames=['n_elements', 'n_nodes'])
 def assemble(n_elements, node_coords, element_length, n_nodes):
-    element_nodes = jnp.array([[i, i + 1] for i in range(n_elements)])
+    element_nodes = jnp.stack((jnp.arange(0, n_elements), jnp.arange(1, n_elements+1)), axis=1) 
     coords = node_coords[element_nodes]
     h_values = element_length
 
