@@ -134,11 +134,15 @@ nx, ny = 5, 5
 x_min, x_max = 0.0, 1.0
 y_min, y_max = 0.0, 1.0
 coords, elements = generate_mesh(nx, ny, x_min, x_max, y_min, y_max)
+dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
+neumann_nodes = jnp.append(nx*jnp.arange(1,ny)-1, jnp.arange((ny-1)*nx, ny*nx))
 # print(elements)
 f = lambda x,y: x*y
 F = load_vector(coords, elements, f)
+print(dirichlet_nodes)
+print(neumann_nodes)
 # print(F)
-print(jnp.sum(F))
+# print(jnp.sum(F))
 
 
 # # Example usage
