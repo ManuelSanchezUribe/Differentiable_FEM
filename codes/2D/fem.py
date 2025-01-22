@@ -3,6 +3,13 @@ import jax.numpy as jnp
 from jax.scipy.linalg import solve
 from jax import config; config.update("jax_enable_x64", True)
 
+values_phi0_ = jnp.array([[0.9083804012656871,  0.7331497981296533,  0.47654496148466596, 0.21994012483967862, 0.04470952170364481],
+                         [0.7331497981296533,  0.591721954534264, 0.38461732752642075, 0.17751270051857745,  0.036084856923188136],
+                         [0.47654496148466596, 0.38461732752642075, 0.25,       0.11538267247357925, 0.02345503851533401],
+                         [0.21994012483967862, 0.17751270051857745,  0.11538267247357925, 0.053252644428581054, 0.010825220107479883],
+                         [0.04470952170364481, 0.036084856923188136, 0.02345503851533401, 0.010825220107479883, 0.002200555327023207]])
+# jnp.set_printoptions(precision=None, threshold =10000000000)
+
 # Generate a structured grid
 def generate_mesh(nx, ny, x_min, x_max, y_min, y_max):
     x = jnp.linspace(x_min, x_max, nx)
@@ -65,10 +72,6 @@ def load_vector(coords, elements, f):
     weights = jnp.array([(322-aux2)/900, (322+aux2)/900, 128/225, (322+aux2)/900, (322-aux2)/900])
     F = jnp.zeros((coords.shape[0]))
     n_el = elements.shape[0]
-    phi0 = lambda xi, eta: 0.25*(1-xi)*(1-eta)
-    phi1 = lambda xi, eta: 0.25*(1+xi)*(1-eta)
-    phi2 = lambda xi, eta: 0.25*(1+xi)*(1+eta)
-    phi3 = lambda xi, eta: 0.25*(1-xi)*(1+eta)
     for e in range(n_el):
         x1,y1 = coords[elements[e,0],:]
         x2,y2 = coords[elements[e,2],:]
@@ -81,12 +84,12 @@ def load_vector(coords, elements, f):
         sum3 = 0
         for i in range(5):
             for j in range(5):
-                sum0 += f(transf_nodes_x[i], transf_nodes_y[j]) * phi0(nodes[i],nodes[j]) * weights[i] * weights[j] * hx * hy * 0.25
-                sum1 += f(transf_nodes_x[i], transf_nodes_y[j]) * phi1(nodes[i],nodes[j]) * weights[i] * weights[j] * hx * hy * 0.25
-                sum2 += f(transf_nodes_x[i], transf_nodes_y[j]) * phi2(nodes[i],nodes[j]) * weights[i] * weights[j] * hx * hy * 0.25
-                sum3 += f(transf_nodes_x[i], transf_nodes_y[j]) * phi3(nodes[i],nodes[j]) * weights[i] * weights[j] * hx * hy * 0.25
+                sum0 += f(transf_nodes_x[i], transf_nodes_y[j]) * values_phi0_[i,j] * weights[i] * weights[j] * hx * hy * 0.25
+                sum1 += f(transf_nodes_x[i], transf_nodes_y[j]) * values_phi0_[j,4-i] * weights[i] * weights[j] * hx * hy * 0.25
+                sum2 += f(transf_nodes_x[i], transf_nodes_y[j]) * values_phi0_[4-i,4-j] * weights[i] * weights[j] * hx * hy * 0.25
+                sum3 += f(transf_nodes_x[i], transf_nodes_y[j]) * values_phi0_[4-j,i] * weights[i] * weights[j] * hx * hy * 0.25
         F = F.at[elements[e,:]].add([sum0,sum1,sum2,sum3])
-    
+    # print(values_phi0)
     return F
 
 # Apply Dirichlet boundary conditions
@@ -127,8 +130,9 @@ coords, elements = generate_mesh(nx, ny, x_min, x_max, y_min, y_max)
 print(elements)
 f = lambda x,y: 1
 F = load_vector(coords, elements, f)
-print(F)
+# print(F)
 print(jnp.sum(F))
+
 
 # # Example usage
 # if __name__ == "__main__":
