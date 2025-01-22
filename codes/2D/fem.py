@@ -1,13 +1,31 @@
 import jax
 import jax.numpy as jnp
 from jax.scipy.linalg import solve
+from jax import config; config.update("jax_enable_x64", True)
 
 # Generate a structured grid
 def generate_mesh(nx, ny, x_min, x_max, y_min, y_max):
     x = jnp.linspace(x_min, x_max, nx)
     y = jnp.linspace(y_min, y_max, ny)
-    X, Y = jnp.meshgrid(x, y, indexing="ij")
-    return X, Y, (nx, ny)
+    n_el = (nx-1)*(ny-1)
+    coords = jnp.zeros((nx*ny,2), dtype=jnp.float64)
+    elements = jnp.zeros((n_el,4), dtype=jnp.float64)
+
+    for i in range(nx):
+        for j in range(ny):
+            ind = j*nx + i
+            coords = coords.at[ind,0].set(x[i])
+            coords = coords.at[ind,1].set(y[j])
+    for i in range(nx-1):
+        for j in range(ny-1):
+            ind = j*(nx-1) + i
+            zero = ind + j
+            one = zero + 1
+            three = ind + (nx-1) + j + 1
+            two = three + 1
+            elements = elements.at[ind,:].set([zero, one, two, three])
+
+    return coords, elements
 
 # Define basis function gradients in the reference element
 def grad_phi():
@@ -79,23 +97,30 @@ def solve_fem_2d(nx, ny, x_min, x_max, y_min, y_max, f, boundary_nodes, boundary
     u = solve(A, b)
     return X, Y, u.reshape((nx, ny))
 
-# Example usage
-if __name__ == "__main__":
-    nx, ny = 20, 20
-    x_min, x_max = 0.0, 1.0
-    y_min, y_max = 0.0, 1.0
 
-    def f(x):
-        return 1.0  # Source term (e.g., uniform)
+nx, ny = 5, 5
+x_min, x_max = 0.0, 1.0
+y_min, y_max = 0.0, 1.0
+coords, elements = generate_mesh(nx, ny, x_min, x_max, y_min, y_max)
+print(elements)
 
-    boundary_nodes = jnp.array([0, nx - 1])  # Example: corner nodes
-    boundary_values = jnp.array([0.0, 1.0])  # Boundary values
+# # Example usage
+# if __name__ == "__main__":
+#     nx, ny = 20, 20
+#     x_min, x_max = 0.0, 1.0
+#     y_min, y_max = 0.0, 1.0
 
-    X, Y, u = solve_fem_2d(nx, ny, x_min, x_max, y_min, y_max, f, boundary_nodes, boundary_values)
+#     def f(x):
+#         return 1.0  # Source term (e.g., uniform)
 
-    # Visualization (optional)
-    import matplotlib.pyplot as plt
-    plt.contourf(X, Y, u, levels=50)
-    plt.colorbar()
-    plt.title("FEM Solution to Laplace Equation (Quadrilateral Elements)")
-    plt.show()
+#     boundary_nodes = jnp.array([0, nx - 1])  # Example: corner nodes
+#     boundary_values = jnp.array([0.0, 1.0])  # Boundary values
+
+#     X, Y, u = solve_fem_2d(nx, ny, x_min, x_max, y_min, y_max, f, boundary_nodes, boundary_values)
+
+#     # Visualization (optional)
+#     import matplotlib.pyplot as plt
+#     plt.contourf(X, Y, u, levels=50)
+#     plt.colorbar()
+#     plt.title("FEM Solution to Laplace Equation (Quadrilateral Elements)")
+#     plt.show()
