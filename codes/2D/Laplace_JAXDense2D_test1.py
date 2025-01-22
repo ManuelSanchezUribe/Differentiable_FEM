@@ -35,7 +35,7 @@ def generate_mesh(nx, ny, x, y):
     # x = jnp.linspace(x_min, x_max, nx)
     # y = jnp.linspace(y_min, y_max, ny)
     n_el = (nx-1)*(ny-1)
-    coords = jnp.zeros((nx*ny,2), dtype=jnp.float64)
+    coords = jnp.zeros((nx*ny,2))
     elements = jnp.zeros((n_el,4), dtype=jnp.int32)
 
     for i in range(nx):
@@ -158,17 +158,16 @@ def solve(theta):
     n_nodes = coords.shape[0]
 
     dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
-    neumann_nodes = jnp.append(nx*jnp.arange(1,ny)-1, jnp.arange((ny-1)*nx, ny*nx))
+    neumann_nodes = jnp.append(nx*jnp.arange(2,ny)-1, jnp.arange((ny-1)*nx-1, ny*nx))
 
     dirichlet_nodes = jnp.append(dirichlet_nodes, neumann_nodes)
-    dirichlet_nodes = jnp.unique(dirichlet_nodes)
 
-    element_length = jnp.zeros((n_elements, 2))
+    # Extract the coordinates for the start and end points of each element
+    start_coords = coords[elements[:, 0], :]
+    end_coords = coords[elements[:, 2], :]
 
-    for e in range(n_elements):
-        x1, y1 = coords[elements[e, 0], :]
-        x2, y2 = coords[elements[e, 2], :]
-        element_length = element_length.at[e,:].set([x2 - x1, y2 - y1])
+    # Compute element lengths in a vectorized manner
+    element_length = end_coords - start_coords
 
     K = assemble_stiffness(n_elements, elements, element_length, n_nodes)
     F = load_vector(coords, elements)
@@ -187,20 +186,20 @@ def solve_and_loss(theta):
     # node_coords_y = jnp.linspace(0, 1, ny)
     coords, elements = generate_mesh(nx, ny, node_coords_x, node_coords_y)
     dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
-    neumann_nodes = jnp.append(nx*jnp.arange(1,ny)-1, jnp.arange((ny-1)*nx, ny*nx))
+    neumann_nodes = jnp.append(nx*jnp.arange(2,ny)-1, jnp.arange((ny-1)*nx-1, ny*nx))
 
     dirichlet_nodes = jnp.append(dirichlet_nodes, neumann_nodes)
-    dirichlet_nodes = jnp.unique(dirichlet_nodes)
+    # dirichlet_nodes = jnp.unique(dirichlet_nodes)
 
     n_elements = elements.shape[0]
     n_nodes = coords.shape[0]
 
-    element_length = jnp.zeros((n_elements, 2))
+    # Extract the coordinates for the start and end points of each element
+    start_coords = coords[elements[:, 0], :]
+    end_coords = coords[elements[:, 2], :]
 
-    for e in range(n_elements):
-        x1, y1 = coords[elements[e, 0], :]
-        x2, y2 = coords[elements[e, 2], :]
-        element_length = element_length.at[e,:].set([x2 - x1, y2 - y1])
+    # Compute element lengths in a vectorized manner
+    element_length = end_coords - start_coords
 
     K = assemble_stiffness(n_elements, elements, element_length, n_nodes)
     F = load_vector(coords, elements)
@@ -211,51 +210,6 @@ def solve_and_loss(theta):
     loss = 0.5*jnp.dot(u, jnp.dot(K, u)) - jnp.dot(F, u)
 
     return loss
-
-# # Define the problem domain and mesh
-# n_elements = 10  # Number of elements
-# n_nodes = n_elements + 1
-
-# # Run the solver
-# theta = jax.random.uniform(key=jax.random.PRNGKey(10),shape=(1,n_nodes))
-
-# # node_coords, u = solve(theta)
-# node_coords, u, val = solve_and_loss(theta)
-
-# # # Output results
-# # print("Node coordinates:", node_coords)
-# # print("Solution u:", u)
-# print(val)
-
-# import matplotlib.pyplot as plt
-# from matplotlib import rcParams
-
-
-# # rcParams['font.family'] = 'serif'
-# # rcParams['font.size'] = 18
-# # rcParams['legend.fontsize'] = 17
-# # rcParams['mathtext.fontset'] = 'cm'
-# # rcParams['axes.labelsize'] = 19
-
-
-# # # Generate a list of x values for visualization
-# # xlist = node_coords
-
-# # ## ---------
-# # # SOLUTION
-# ## ---------
-
-# fig, ax = plt.subplots()
-# # Plot the approximate solution obtained from the trained model
-# plt.plot(node_coords, u, color='b')
-
-# plt.legend(['u_approx', 'u_exact'])
-
-# ax.grid(which = 'both', axis = 'both', linestyle = ':', color = 'gray')
-# plt.tight_layout()
-
-# plt.savefig('plot.png')
-# plt.show()
 
 class Elliptic1D:
     def __init__(self, f, gu, gr, sigma, ritz_value, u=None):
@@ -308,7 +262,7 @@ def problem(problem_number):
 
 
 # print(solve_and_loss(jnp.zeros((200))))
-# coords, u = solve(jnp.zeros((200)))
+# coords, u = solve(jnp.zeros((100)))
 # print(max(u))
 
 # # # ## ---------
@@ -327,4 +281,5 @@ def problem(problem_number):
 # plt.xlabel('x')
 # plt.ylabel('y')
 # plt.axis('equal')  # Mantener proporciones
+# plt.savefig('femtest.png')
 # plt.show()
