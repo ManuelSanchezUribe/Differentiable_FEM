@@ -9,7 +9,7 @@ def generate_mesh(nx, ny, x_min, x_max, y_min, y_max):
     y = jnp.linspace(y_min, y_max, ny)
     n_el = (nx-1)*(ny-1)
     coords = jnp.zeros((nx*ny,2), dtype=jnp.float64)
-    elements = jnp.zeros((n_el,4), dtype=jnp.float64)
+    elements = jnp.zeros((n_el,4), dtype=jnp.int32)
 
     for i in range(nx):
         for j in range(ny):
@@ -58,14 +58,36 @@ def stiffness_matrix(nodes, elements):
     return A
 
 # Assemble the load vector
-def load_vector(nodes, elements, f):
-    element_nodes = nodes[elements]
-    J = jnp.einsum("ki,eij->ekj", grad_phi(), element_nodes)
-    detJ = jnp.linalg.det(J)
-    midpoints = element_nodes.mean(axis=1)
-    b_local = f(midpoints) * detJ / 4.0  # Divide by 4 for quadrilateral shape
-    b = jax.ops.segment_sum(b_local.flatten(), elements.flatten(), nodes.shape[0])
-    return b
+def load_vector(coords, elements, f):
+    aux1 = 2*jnp.sqrt(10/7)
+    aux2 = 13*jnp.sqrt(70)
+    nodes = jnp.array([-1/3*jnp.sqrt(5+aux1), -1/3*jnp.sqrt(5-aux1), 0, 1/3*jnp.sqrt(5-aux1), 1/3*jnp.sqrt(5+aux1)])
+    weights = jnp.array([(322-aux2)/900, (322+aux2)/900, 128/225, (322+aux2)/900, (322-aux2)/900])
+    F = jnp.zeros((coords.shape[0]))
+    n_el = elements.shape[0]
+    phi0 = lambda xi, eta: 0.25*(1-xi)*(1-eta)
+    phi1 = lambda xi, eta: 0.25*(1+xi)*(1-eta)
+    phi2 = lambda xi, eta: 0.25*(1+xi)*(1+eta)
+    phi3 = lambda xi, eta: 0.25*(1-xi)*(1+eta)
+    for e in range(n_el):
+        x1,y1 = coords[elements[e,0],:]
+        x2,y2 = coords[elements[e,2],:]
+        hx = x2-x1; hy = y2-y1
+        transf_nodes_x = 0.5*hx*nodes + 0.5*(x1+x2)
+        transf_nodes_y = 0.5*hy*nodes + 0.5*(y1+y2)
+        sum0 = 0
+        sum1 = 0
+        sum2 = 0
+        sum3 = 0
+        for i in range(5):
+            for j in range(5):
+                sum0 += f(transf_nodes_x[i], transf_nodes_y[j]) * phi0(nodes[i],nodes[j]) * weights[i] * weights[j] * hx * hy * 0.25
+                sum1 += f(transf_nodes_x[i], transf_nodes_y[j]) * phi1(nodes[i],nodes[j]) * weights[i] * weights[j] * hx * hy * 0.25
+                sum2 += f(transf_nodes_x[i], transf_nodes_y[j]) * phi2(nodes[i],nodes[j]) * weights[i] * weights[j] * hx * hy * 0.25
+                sum3 += f(transf_nodes_x[i], transf_nodes_y[j]) * phi3(nodes[i],nodes[j]) * weights[i] * weights[j] * hx * hy * 0.25
+        F = F.at[elements[e,:]].add([sum0,sum1,sum2,sum3])
+    
+    return F
 
 # Apply Dirichlet boundary conditions
 def apply_dirichlet(A, b, boundary_nodes, boundary_values):
@@ -103,6 +125,10 @@ x_min, x_max = 0.0, 1.0
 y_min, y_max = 0.0, 1.0
 coords, elements = generate_mesh(nx, ny, x_min, x_max, y_min, y_max)
 print(elements)
+f = lambda x,y: 1
+F = load_vector(coords, elements, f)
+print(F)
+print(jnp.sum(F))
 
 # # Example usage
 # if __name__ == "__main__":
