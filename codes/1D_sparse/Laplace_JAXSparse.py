@@ -11,9 +11,7 @@ problem_number=2
 def softmax_nodes(params):
     # Compute the softmax values
     softmax_values = jax.nn.softmax(params)
-    # softmax_values = jax.nn.softmax(params)
 
-    # print(paa)
     # Compute the cumulative sum of the softmax values
     cumulative_sum = jnp.cumsum(softmax_values)
     cumulative_sum_with_zero = jnp.insert(cumulative_sum, 0, 0)
@@ -26,17 +24,16 @@ def element_stiffness(h):
 
 @jit
 def element_load(coords):
-    x1, x2 = coords
-    p1 = -1/jnp.sqrt(3)
-    p2 = 1/jnp.sqrt(3)
-    pt1 = (x2 - x1) * p1 / 2 + (x2 + x1) / 2
-    pt2 = (x2 - x1) * p2 / 2 + (x2 + x1) / 2
+    x1, x2   = coords
+    p1       = -1/jnp.sqrt(3)
+    p2       = 1/jnp.sqrt(3)
+    pt1      = (x2 - x1) * p1 / 2 + (x2 + x1) / 2
+    pt2      = (x2 - x1) * p2 / 2 + (x2 + x1) / 2
     phiatpt1 = (p2+1)/2
     phiatpt2 = (1+p1)/2
-    #midpoint = (x1 + x2) / 2
-    h = x2 - x1
+    h        = x2 - x1
     problem_test = problem(problem_number)
-    f = problem_test.f
+    f            = problem_test.f
     return h * jnp.array([f(pt1)*phiatpt1 + f(pt2)*phiatpt2, f(pt1)*phiatpt2 + f(pt2)*phiatpt1]) / 2
 
 # Assemble global stiffness matrix and load vector
@@ -137,9 +134,9 @@ def solve_and_loss(theta):
     bc_g0 = problem_test.g0
     bc_g1 = problem_test.g1
 
-    n_nodes = theta.shape[1] + 1
-    n_elements = n_nodes - 1
-    node_coords = softmax_nodes(theta)
+    n_nodes        = theta.shape[1] + 1
+    n_elements     = n_nodes - 1
+    node_coords    = softmax_nodes(theta)
     element_length = node_coords[1:] - node_coords[:-1]
 
     K, F = assemble(n_elements, node_coords, element_length, n_nodes)
@@ -162,13 +159,13 @@ class Elliptic1D:
         - sigma (callable): Coefficient function sigma(x).
         - u (callable, optional): Solution function (if known, default is None).
         """
-        self.a = 0.0  # Left endpoint of the domain
-        self.b = 1.0  # Right endpoint of the domain
-        self.f = f
-        self.g0 = g0
-        self.g1 = g1
+        self.a     = 0.0  # Left endpoint of the domain
+        self.b     = 1.0  # Right endpoint of the domain
+        self.f     = f
+        self.g0    = g0
+        self.g1    = g1
         self.sigma = sigma
-        self.u = u  # Analytical solution, if provided
+        self.u     = u  # Analytical solution, if provided
 
 def problem(problem_number):
     """

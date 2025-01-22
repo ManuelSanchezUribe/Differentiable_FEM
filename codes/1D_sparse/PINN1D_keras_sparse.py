@@ -48,52 +48,13 @@ class special_layer(keras.layers.Layer):
     def call(self, inputs):
         return jnp.array(self.mobile_interior_vertices)
 
-def make_special_model(n_nodes, dimension=1, w_interior_initial_values=None):
+def make_model(n_nodes, dimension=1, w_interior_initial_values=None):
     L = special_layer(n_nodes, dimension, w_interior_initial_values)
     xvals = keras.layers.Input(shape=(1,), name='x_input',dtype=dtype)
     output = L(xvals)
     model = keras.Model(inputs=xvals, outputs=output, name='model')
     return model
 
-## Define an approximate solution (u_nn): A neural network model
-def make_model(neurons, n_layers, n_output, activation='tanh'):
-
-    """
-    Creates a neural network model to approximate the solution of
-        int (grad u ).(grad v) - int f.v = 0
-
-    Args:
-        neurons (int): The number of neurons in each hidden layer.
-        activation (str, optional): Activation function for hidden layers.
-
-    Returns:
-        keras.Model: A neural network model for the approximate solution.
-    """
-
-    xvals = keras.layers.Input(shape=(1,), name='x_input',dtype=dtype)
-
-	# The input
-    l1 = keras.layers.Dense(neurons, activation=activation, dtype=dtype)(xvals)
-
-    ## ---------------
-    #  The dense layers
-    ## ---------------
-
-    # First layer
-    for l in range(n_layers-2):
-        # Hidden layers
-        l1 = keras.layers.Dense(neurons, activation=activation, dtype=dtype)(l1)
-    # Last layer
-    output = keras.layers.Dense(n_output, activation=activation, dtype=dtype)(l1)
-
-    model = keras.Model(inputs = xvals, outputs = output, name='model')
-
-    # Print the information of the model u
-    # model.summary()
-
-    return model
-
-##PINNs loss function ( loss into layer )
 class loss(keras.layers.Layer):
     def __init__(self,model,**kwargs):
 
@@ -128,8 +89,6 @@ class loss(keras.layers.Layer):
         loss = solve_and_loss(theta)
         return loss
 
-
-## Create a loss model
 def make_loss_model(model):
     """
     Constructs a loss model for PINNs.
@@ -146,12 +105,10 @@ def make_loss_model(model):
     # Compute the loss using the provided neural network and
     # integration parameters
     output = loss(model)(xvals)
-    # output = loss_dummy(model)(xvals)
     # Create a Keras model for the loss
     loss_model = keras.Model(inputs=xvals, outputs=output)
 
     return loss_model
-
 
 def tricky_loss(y_pred, y_true):
     """
@@ -170,7 +127,7 @@ def tricky_loss(y_pred, y_true):
 
 # =============================================================================
 #
-#          Example 1 - Inputs
+#          TRAINING 
 #
 # =============================================================================
 
@@ -182,7 +139,7 @@ nn = int(2**5)
 iterations = 5000
 
 # Initialize the neural network model for the approximate solution
-model = make_special_model(nn)
+model = make_model(nn)
 
 init_nodes = model(jnp.array([1]))
 
@@ -202,8 +159,7 @@ lr_scheduler = keras.callbacks.LearningRateScheduler(lr_schedule)
 # Compile the loss model with a custom loss function (tricky_loss)
 loss_model.compile(optimizer=optimizer, loss=tricky_loss)
 
-# Train the model using a single training data point ([1.], [1.]) for a
-# specified number of epochs (iterations)
+# Train the model
 history = loss_model.fit(jnp.array([1.]), jnp.array([1.]), epochs=iterations, callbacks = [lr_scheduler])
 
 # #Plot loss history
@@ -211,16 +167,8 @@ plt.figure()
 plt.plot(history.history['loss'])
 # plt.savefig('loss.png')
 
-# # node_coords, u = solve(theta)
-
 node_coords, u = solve(model(jnp.array([1])))
 init_coords, o = solve(init_nodes)
-
-
-# # # Output results
-# print("Node coordinates:", node_coords)
-# # print("Solution u:", u)
-# # print(val)
 
 
 # ## ---------
