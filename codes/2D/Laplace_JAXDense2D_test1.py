@@ -3,16 +3,18 @@ import jax.numpy as jnp
 from jax import jit
 import keras
 from functools import partial
+from jax import config; config.update("jax_enable_x64", True)
 
 global problem_number
 problem_number=0
 
-#@jit
+
 def softmax_nodes(params):
     n_nodes = params.shape[1]
     # Compute the softmax values
     softmax_values_x = jax.nn.softmax(params[0, 0:int(n_nodes/2)])
     softmax_values_y = jax.nn.softmax(params[0, int(n_nodes/2):])
+    print(softmax_values_x)
 
     # Compute the cumulative sum of the softmax values in X axis
     cumulative_sum_x = jnp.cumsum(softmax_values_x)
@@ -37,7 +39,7 @@ def generate_mesh(nx, ny, x, y):
     # y = jnp.linspace(y_min, y_max, ny)
     n_el = (nx-1)*(ny-1)
     coords = jnp.zeros((nx*ny,2))
-    elements = jnp.zeros((n_el,4), dtype=jnp.int32)
+    elements = jnp.zeros((n_el,4), dtype=jnp.int64)
 
     for i in range(nx):
         for j in range(ny):
@@ -55,7 +57,30 @@ def generate_mesh(nx, ny, x, y):
 
     return coords, elements
 
+
+# def generate_mesh(nx, ny, x, y):
+#     n_el = (nx-1)*(ny-1)
+    
+#     # Create a grid of coordinates
+#     print(x, y)
+#     x_coords, y_coords = jnp.meshgrid(x, y, indexing='xy')
+#     print(x_coords)
+#     coords = jnp.stack([x_coords.ravel(), y_coords.ravel()], axis=-1)
+#     print(coords)
+    
+#     # Create elements
+#     i, j = jnp.meshgrid(jnp.arange(nx-1), jnp.arange(ny-1), indexing='xy')
+#     ind = j * nx + i
+#     zero = ind
+#     one = zero + 1
+#     three = zero + nx
+#     two = three + 1
+#     elements = jnp.stack([zero.ravel(), one.ravel(), two.ravel(), three.ravel()], axis=-1)
+    
+#     return coords, elements
+
 # Assemble the stiffness matrix
+@jit
 def element_stiffness(hvalues):
     hx, hy = hvalues
     array_x = jnp.array([[2, -2, -1, 1],
@@ -69,14 +94,10 @@ def element_stiffness(hvalues):
     
     return array_x + array_y 
 
-
+@partial(jax.jit, static_argnames=['n_nodes'])
 def assemble_stiffness(n_elements, elements, element_length, n_nodes):
-    # Function to compute stiffness matrix for a single element
-    def element_stiffness_fn(length):
-        return element_stiffness(length)
-    
     # Compute stiffness matrices for all elements
-    element_stiffness_matrices = jax.vmap(element_stiffness_fn)(element_length)
+    element_stiffness_matrices = jax.vmap(element_stiffness)(element_length)
     
     # Generate row and column indices for scatter addition
     row_indices = elements[:, None, :].repeat(elements.shape[1], axis=1)
@@ -90,6 +111,7 @@ def assemble_stiffness(n_elements, elements, element_length, n_nodes):
 
 
 # Assemble the load vector
+@jit
 def load_vector(coords, elements):
     problem_test = problem(problem_number)
     f = problem_test.f
@@ -127,6 +149,7 @@ def load_vector(coords, elements):
 
 
 # Apply boundary conditions
+@jit
 def apply_boundary_conditions(K, F, dirichlet_nodes):
     problem_test = problem(problem_number)
 
@@ -147,6 +170,7 @@ def apply_boundary_conditions(K, F, dirichlet_nodes):
     return K
 
 # Solve the system
+
 def solve(theta):
     nx = int(theta.shape[1]/2)
     ny = nx
@@ -179,6 +203,7 @@ def solve(theta):
     return coords, u
 
 # Solve the system
+
 def solve_and_loss(theta):
     nx = int(theta.shape[1]/2)
     ny = nx
@@ -262,8 +287,8 @@ def problem(problem_number):
     return Elliptic1D(**data)
 
 
-# print(solve_and_loss(jnp.zeros((200))))
-# coords, u = solve(jnp.zeros((100)))
+# print(solve_and_loss(jnp.ones((100))))
+# coords, u = solve(jnp.ones((100)))
 # print(max(u))
 
 # # # ## ---------
