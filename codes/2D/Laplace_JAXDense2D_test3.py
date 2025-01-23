@@ -7,16 +7,16 @@ from jax import config; config.update("jax_enable_x64", True)
 
 
 global problem_number
-problem_number=4
+problem_number=2
 
 #@jit
 def softmax_nodes(params):
     n_nodes = params.shape[1]
     # Compute the softmax values
-    # softmax_values_x = jax.nn.softmax(params[0, 0:int(n_nodes/2)])
-    # softmax_values_y = jax.nn.softmax(params[0, int(n_nodes/2):])
-    softmax_values_x = jax.nn.softmax(params[0, 0:int(n_nodes -2)])
-    softmax_values_y = jax.nn.softmax(params[0, int(n_nodes -2):])
+    softmax_values_x = jax.nn.softmax(params[0, 0:int(n_nodes/2)])
+    softmax_values_y = jax.nn.softmax(params[0, int(n_nodes/2):])
+    # softmax_values_x = jax.nn.softmax(params[0, 0:int(n_nodes -1)])
+    # softmax_values_y = jax.nn.softmax(params[0, int(n_nodes -1):])
 
     # Compute the cumulative sum of the softmax values in X axis
     cumulative_sum_x = jnp.cumsum(softmax_values_x)
@@ -34,6 +34,22 @@ values_phi0_ = jnp.array([[0.9083804012656871,  0.7331497981296533,  0.476544961
                          [0.47654496148466596, 0.38461732752642075, 0.25,       0.11538267247357925, 0.02345503851533401],
                          [0.21994012483967862, 0.17751270051857745,  0.11538267247357925, 0.053252644428581054, 0.010825220107479883],
                          [0.04470952170364481, 0.036084856923188136, 0.02345503851533401, 0.010825220107479883, 0.002200555327023207]])
+values_phi1_ = jnp.array([[0.04470952170364481, 0.036084856923188136, 0.02345503851533401, 0.010825220107479883, 0.002200555327023207],
+                         [0.21994012483967862,  0.17751270051857745, 0.11538267247357925, 0.053252644428581054,  0.010825220107479883],
+                         [0.47654496148466596, 0.38461732752642075, 0.25,       0.11538267247357925, 0.02345503851533401],
+                         [0.7331497981296533, 0.591721954534264,  0.38461732752642075, 0.17751270051857745, 0.036084856923188136],
+                         [0.9083804012656871, 0.7331497981296533, 0.47654496148466596, 0.21994012483967862, 0.04470952170364481]])
+values_phi2_ = jnp.array([[0.002200555327023207, 0.010825220107479883, 0.02345503851533401, 0.036084856923188136, 0.04470952170364481],
+                         [0.010825220107479883,  0.053252644428581054, 0.11538267247357925, 0.17751270051857745,  0.21994012483967862],
+                         [0.02345503851533401, 0.11538267247357925, 0.25,       0.38461732752642075, 0.47654496148466596],
+                         [0.036084856923188136, 0.17751270051857745,  0.38461732752642075, 0.591721954534264, 0.7331497981296533],
+                         [0.04470952170364481, 0.21994012483967862, 0.47654496148466596, 0.7331497981296533, 0.9083804012656871]])
+values_phi3_ = jnp.array([[0.04470952170364481, 0.21994012483967862, 0.47654496148466596, 0.7331497981296533, 0.9083804012656871],
+                         [0.036084856923188136,  0.17751270051857745, 0.38461732752642075, 0.591721954534264,  0.7331497981296533],
+                         [0.02345503851533401, 0.11538267247357925, 0.25,       0.38461732752642075, 0.47654496148466596],
+                         [0.010825220107479883, 0.053252644428581054,  0.11538267247357925, 0.17751270051857745, 0.21994012483967862],
+                         [0.002200555327023207, 0.010825220107479883, 0.02345503851533401, 0.036084856923188136, 0.04470952170364481]])
+
 # jnp.set_printoptions(precision=None, threshold =10000000000)
 
 # Generate a structured grid
@@ -92,7 +108,7 @@ def assemble_stiffness(n_elements, elements, element_length, n_nodes):
     return K
 
 
-# Assemble the load vector
+
 def load_vector(coords, elements):
     problem_test = problem(problem_number)
     f = problem_test.f
@@ -100,6 +116,7 @@ def load_vector(coords, elements):
     aux2 = 13*jnp.sqrt(70)
     nodes = jnp.array([-1/3*jnp.sqrt(5+aux1), -1/3*jnp.sqrt(5-aux1), 0, 1/3*jnp.sqrt(5-aux1), 1/3*jnp.sqrt(5+aux1)])
     weights = jnp.array([(322-aux2)/900, (322+aux2)/900, 128/225, (322+aux2)/900, (322-aux2)/900])
+
 
     def compute_element(e):
         x1, y1 = coords[elements[e, 0], :]
@@ -115,9 +132,9 @@ def load_vector(coords, elements):
 
         f_vals = f(tx, ty)
         sum0 = jnp.sum(f_vals * values_phi0_ * wx * wy * jacobian)
-        sum1 = jnp.sum(f_vals * values_phi0_[:, ::-1] * wx * wy * jacobian)
-        sum2 = jnp.sum(f_vals * values_phi0_[::-1, ::-1] * wx * wy * jacobian)
-        sum3 = jnp.sum(f_vals * values_phi0_[::-1, :] * wx * wy * jacobian)
+        sum1 = jnp.sum(f_vals * values_phi1_ * wx * wy * jacobian)
+        sum2 = jnp.sum(f_vals * values_phi2_ * wx * wy * jacobian)
+        sum3 = jnp.sum(f_vals * values_phi3_ * wx * wy * jacobian)
 
         return elements[e, :], jnp.array([sum0, sum1, sum2, sum3])
 
@@ -135,17 +152,14 @@ def apply_boundary_conditions(K, F, dirichlet_nodes, neumann_edges, elements, co
     K = K.at[dirichlet_nodes, :].set(0)
     K = K.at[:, dirichlet_nodes].set(0)
     K = K.at[dirichlet_nodes, dirichlet_nodes].set(1)
-
-    F = F.at[dirichlet_nodes].set(0)
-
     aux1 = 2*jnp.sqrt(10/7)
     aux2 = 13*jnp.sqrt(70)
     nodes = jnp.array([-1/3*jnp.sqrt(5+aux1), -1/3*jnp.sqrt(5-aux1), 0, 1/3*jnp.sqrt(5-aux1), 1/3*jnp.sqrt(5+aux1)])
     weights = jnp.array([(322-aux2)/900, (322+aux2)/900, 128/225, (322+aux2)/900, (322-aux2)/900])
     
-    # for i in range(neumann_edges.shape[0]//2):
+    for i in range(neumann_edges.shape[0]//2):
     # for i in range(neumann_edges.shape[0]//3):
-    for i in range(2):
+    # for i in range(1):
         g = problem_test.gr
         e = neumann_edges[i, 0]
         n1 = neumann_edges[i, 1]
@@ -164,9 +178,9 @@ def apply_boundary_conditions(K, F, dirichlet_nodes, neumann_edges, elements, co
         F = F.at[elements[e, n1]].add(sum0)
         F = F.at[elements[e, n2]].add(sum1)
 
-    # for i in range(neumann_edges.shape[0]//2, neumann_edges.shape[0]):
+    for i in range(neumann_edges.shape[0]//2, neumann_edges.shape[0]):
     # for i in range(neumann_edges.shape[0]//3, neumann_edges.shape[0]):
-    for i in range(i, neumann_edges.shape[0]):
+    # for i in range(1, neumann_edges.shape[0]):
         g = problem_test.gu
         e = neumann_edges[i, 0]
         n1 = neumann_edges[i, 1]
@@ -185,15 +199,16 @@ def apply_boundary_conditions(K, F, dirichlet_nodes, neumann_edges, elements, co
         F = F.at[elements[e, n1]].add(sum0)
         F = F.at[elements[e, n2]].add(sum1)
 
+    F = F.at[dirichlet_nodes].set(0)
     return K, F
 
 # Solve the system
 def solve(theta):
-    # nx = int(theta.shape[1]/2) + 1
-    # ny = nx
+    nx = int(theta.shape[1]/2) + 1
+    ny = nx
 
-    nx = int(theta.shape[1] - 2) + 1
-    ny = 2
+    # nx = int(theta.shape[1] - 1) + 1
+    # ny = 2
     
     node_coords_x, node_coords_y  = softmax_nodes(theta)
     # node_coords_x = jnp.linspace(0, 1, nx)
@@ -202,24 +217,26 @@ def solve(theta):
     n_elements = elements.shape[0]
     n_nodes = coords.shape[0]
 
-    # dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
-    dirichlet_nodes = nx*jnp.arange(1,ny)
+    dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
+    # dirichlet_nodes = nx*jnp.arange(ny)
     
     ind1 = jnp.arange(ny-1, dtype=jnp.int64) * (nx-1) + (nx-2)
-    # ind2 = (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64)
-    ind2 = jnp.append(jnp.arange(nx-1), (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64))
+    ind2 = (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64)
+    # ind2 = jnp.append(jnp.arange(nx-1), (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64))
 
-    # local1 = jnp.append(jnp.ones(ny-1), 2 * jnp.ones(nx-1))
-    local1 = jnp.append(jnp.ones(ny-1), jnp.zeros(nx-1))
-    local1 = jnp.append(local1, 2 * jnp.ones(nx-1))
-    # local2 = jnp.append(2 * jnp.ones(ny-1), 3 * jnp.ones(nx-1))
-    local2 = jnp.append(2 * jnp.ones(ny-1),jnp.ones(nx-1))
-    local2 = jnp.append(local2, 3 * jnp.ones(nx-1))
+    local1 = jnp.append(jnp.ones(ny-1), 2 * jnp.ones(nx-1))
+    # local1 = jnp.append(jnp.ones(ny-1), jnp.zeros(nx-1))
+    # local1 = jnp.append(local1, 2 * jnp.ones(nx-1))
+    local2 = jnp.append(2 * jnp.ones(ny-1), 3 * jnp.ones(nx-1))
+    # local2 = jnp.append(2 * jnp.ones(ny-1),jnp.ones(nx-1))
+    # local2 = jnp.append(local2, 3 * jnp.ones(nx-1))
 
-    side = jnp.append(jnp.zeros(ny-1), jnp.ones(2*(nx-1)))
+    side = jnp.append(jnp.zeros(ny-1), jnp.ones((nx-1)))
+    # side = jnp.append(jnp.zeros(ny-1), jnp.ones(2*(nx-1)))
     ind = jnp.append(ind1, ind2)
 
-    neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), (2*(nx-1) + (ny-1), 4), order='F')
+    neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), ((nx-1) + (ny-1), 4), order='F')
+    # neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), (2*(nx-1) + (ny-1), 4), order='F')
 
     # Extract the coordinates for the start and end points of each element
     start_coords = coords[elements[:, 0], :]
@@ -233,16 +250,18 @@ def solve(theta):
 
     K, F = apply_boundary_conditions(K, F, dirichlet_nodes, neumann_edges, elements, coords)
     u = jnp.linalg.solve(K, F)
+    print(u@K@u)
+    print(F@u)
 
     return coords, u
 
 # Solve the system
 def solve_and_loss(theta):
-    # nx = int(theta.shape[1]/2) + 1
-    # ny = nx
+    nx = int(theta.shape[1]/2) + 1
+    ny = nx
 
-    nx = int(theta.shape[1] - 2) + 1
-    ny = 2
+    # nx = int(theta.shape[1] - 1) + 1
+    # ny = 2
     
     node_coords_x, node_coords_y  = softmax_nodes(theta)
     # node_coords_x = jnp.linspace(0, 1, nx)
@@ -251,24 +270,26 @@ def solve_and_loss(theta):
     n_elements = elements.shape[0]
     n_nodes = coords.shape[0]
 
-    # dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
-    dirichlet_nodes = nx*jnp.arange(1,ny)
+    dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
+    # dirichlet_nodes = nx*jnp.arange(ny)
     
     ind1 = jnp.arange(ny-1, dtype=jnp.int64) * (nx-1) + (nx-2)
-    # ind2 = (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64)
-    ind2 = jnp.append(jnp.arange(nx-1), (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64))
+    ind2 = (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64)
+    # ind2 = jnp.append(jnp.arange(nx-1), (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64))
 
-    # local1 = jnp.append(jnp.ones(ny-1), 2 * jnp.ones(nx-1))
-    local1 = jnp.append(jnp.ones(ny-1), jnp.zeros(nx-1))
-    local1 = jnp.append(local1, 2 * jnp.ones(nx-1))
-    # local2 = jnp.append(2 * jnp.ones(ny-1), 3 * jnp.ones(nx-1))
-    local2 = jnp.append(2 * jnp.ones(ny-1),jnp.ones(nx-1))
-    local2 = jnp.append(local2, 3 * jnp.ones(nx-1))
+    local1 = jnp.append(jnp.ones(ny-1), 2 * jnp.ones(nx-1))
+    # local1 = jnp.append(jnp.ones(ny-1), jnp.zeros(nx-1))
+    # local1 = jnp.append(local1, 2 * jnp.ones(nx-1))
+    local2 = jnp.append(2 * jnp.ones(ny-1), 3 * jnp.ones(nx-1))
+    # local2 = jnp.append(2 * jnp.ones(ny-1),jnp.ones(nx-1))
+    # local2 = jnp.append(local2, 3 * jnp.ones(nx-1))
 
-    side = jnp.append(jnp.zeros(ny-1), jnp.ones(2*(nx-1)))
+    side = jnp.append(jnp.zeros(ny-1), jnp.ones((nx-1)))
+    # side = jnp.append(jnp.zeros(ny-1), jnp.ones(2*(nx-1)))
     ind = jnp.append(ind1, ind2)
 
-    neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), (2*(nx-1) + (ny-1), 4), order='F')
+    neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), ((nx-1) + (ny-1), 4), order='F')
+    # neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), (2*(nx-1) + (ny-1), 4), order='F')
 
     # Extract the coordinates for the start and end points of each element
     start_coords = coords[elements[:, 0], :]
@@ -338,20 +359,6 @@ def problem(problem_number):
             "f": lambda x, y: 0.21*x**(-1.3)*y, # Singular source term
             "gu": lambda x, y: x**(0.7),  # Neumman Boundary condition for y = 1 
             "gr": lambda x, y: 0.7*y,  # Neumman Boundary condition for x = 1
-            "sigma": lambda x, y: 1,  # Constant coefficient sigma(x),
-            "ritz_value": -34.3027, # Ritz value for the problem
-        },
-        {
-            "f": lambda x, y: -2*y**2 - 2*x**2, # Singular source term
-            "gu": lambda x, y: 2*x**2,  # Neumman Boundary condition for y = 1 
-            "gr": lambda x, y: 2*y**2,  # Neumman Boundary condition for x = 1
-            "sigma": lambda x, y: 1,  # Constant coefficient sigma(x),
-            "ritz_value": -34.3027, # Ritz value for the problem
-        },
-        {
-            "f": lambda x, y: 0*0.21*x**(-1.3), # Singular source term
-            "gu": lambda x, y: 0,  # Neumman Boundary condition for y = 1 
-            "gr": lambda x, y: 1,  # Neumman Boundary condition for x = 1
             "sigma": lambda x, y: 1,  # Constant coefficient sigma(x),
             "ritz_value": -34.3027, # Ritz value for the problem
         },

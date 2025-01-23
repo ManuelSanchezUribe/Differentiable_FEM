@@ -7,7 +7,7 @@ from jax import config; config.update("jax_enable_x64", True)
 
 
 global problem_number
-problem_number=0
+problem_number=1
 
 #@jit
 def softmax_nodes(params):
