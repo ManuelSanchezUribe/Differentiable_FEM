@@ -85,7 +85,6 @@ def to_csr(COO, n_removes, n_init_rows):
 
     return sparse.CSR((data_summed, final_col, indices_filas), shape=COO.shape)
 
-
 @partial(jax.jit, static_argnames=['n_elements', 'n_nodes'])
 def assemble_CSR(n_elements, node_coords, element_length, n_nodes):
     element_nodes = jnp.stack((jnp.arange(0, n_elements), jnp.arange(1, n_elements+1)), axis=1) 
