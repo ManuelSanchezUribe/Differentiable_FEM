@@ -37,7 +37,7 @@ def generate_mesh(nx, ny, x, y):
     # y = jnp.linspace(y_min, y_max, ny)
     n_el = (nx-1)*(ny-1)
     coords = jnp.zeros((nx*ny,2))
-    elements = jnp.zeros((n_el,4), dtype=jnp.int32)
+    elements = jnp.zeros((n_el,4), dtype=jnp.int64)
 
     for i in range(nx):
         for j in range(ny):
@@ -127,33 +127,52 @@ def load_vector(coords, elements):
 
 
 # Apply boundary conditions
-def apply_boundary_conditions(K, F, dirichlet_nodes):
+def apply_boundary_conditions(K, F, dirichlet_nodes, neumann_edges, elements, coords):
     problem_test = problem(problem_number)
-
-    # F = F - K[:, 0] * bc_g0
-    # F = F - K[:, -1] * bc_g1
-
     K = K.at[dirichlet_nodes, :].set(0)
     K = K.at[:, dirichlet_nodes].set(0)
-    # K = K.at[-1, :].set(0)
-    # K = K.at[:, -1].set(0)
     K = K.at[dirichlet_nodes, dirichlet_nodes].set(1)
-    # K = K.at[-1, -1].set(1)
 
     F = F.at[dirichlet_nodes].set(0)
-    # F = F.at[-1].set(bc_g1)
-    # F = F.at[-1].set(F[-1]+0.7)
 
-    return K
+    aux1 = 2*jnp.sqrt(10/7)
+    aux2 = 13*jnp.sqrt(70)
+    nodes = jnp.array([-1/3*jnp.sqrt(5+aux1), -1/3*jnp.sqrt(5-aux1), 0, 1/3*jnp.sqrt(5-aux1), 1/3*jnp.sqrt(5+aux1)])
+    weights = jnp.array([(322-aux2)/900, (322+aux2)/900, 128/225, (322+aux2)/900, (322-aux2)/900])
+
+    for i in range(neumann_edges.shape[0]):
+        if neumann_edges[i,3] == 0:
+            g = problem_test.gr
+        else:
+            g = problem_test.gu
+        e = int(neumann_edges[i,0])
+        n1 = int(neumann_edges[i,1])
+        n2 = int(neumann_edges[i,2])
+        x1, y1 = coords[elements[e, n1], :]
+        x2, y2 = coords[elements[e, n2], :]
+        norm = 0.5*jnp.sqrt((x2-x1)**2+(y2-y1)**2)
+        transformed_x = x1 + 0.5*(nodes + 1)*(x2-x1)
+        transformed_y = y1 + 0.5*(nodes + 1)*(y2-y1)
+        sum0 = 0
+        sum1 = 0
+        for j in range(5):
+            sum0 += norm * weights[j] * g(transformed_x[j], transformed_y[j]) * (0.5 * (1 - nodes[j]))
+            sum1 += norm * weights[j] * g(transformed_x[j], transformed_y[j]) * (0.5 * (1 + nodes[j]))
+        # print(sum0, sum1)
+        F = F.at[elements[e, n1]].add(sum0)
+        F = F.at[elements[e, n2]].add(sum1)
+
+
+    return K, F
 
 # Solve the system
 def solve(theta):
     nx = int(theta.shape[1]/2)
     ny = nx
     
-    node_coords_x, node_coords_y  = softmax_nodes(theta)
-    # node_coords_x = jnp.linspace(0, 1, nx)
-    # node_coords_y = jnp.linspace(0, 1, ny)
+    # node_coords_x, node_coords_y  = softmax_nodes(theta)
+    node_coords_x = jnp.linspace(0, 1, nx)
+    node_coords_y = jnp.linspace(0, 1, ny)
     coords, elements = generate_mesh(nx, ny, node_coords_x, node_coords_y)
     n_elements = elements.shape[0]
     n_nodes = coords.shape[0]
@@ -161,7 +180,22 @@ def solve(theta):
     dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
     neumann_nodes = jnp.append(nx*jnp.arange(2,ny)-1, jnp.arange((ny-1)*nx-1, ny*nx))
 
-    dirichlet_nodes = jnp.append(dirichlet_nodes, neumann_nodes)
+    # dirichlet_nodes = jnp.append(dirichlet_nodes, neumann_nodes)
+
+    ind1 = jnp.arange(ny-1, dtype=jnp.int64)*(nx-1) + (nx-2)
+    ind2 = (ny-2)*(nx-1) + jnp.arange(nx-1, dtype=jnp.int64)
+    local11 = jnp.ones((ny-1))
+    local12 = 2*jnp.ones((ny-1))
+    local21 = 2*jnp.ones((nx-1))
+    local22 = 3*jnp.ones((nx-1))
+    local1 = jnp.append(local11, local21)
+    local2 = jnp.append(local12, local22)
+    side1 = jnp.zeros((ny-1))
+    side2 = jnp.ones((nx-1))
+    side = jnp.append(side1,side2)
+    ind = jnp.append(ind1, ind2)
+    neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), ((nx-1)+(ny-1),4),order='F')
+    # neumann_edges = jnp.append(neumann_edges, local2, axis=1)
 
     # Extract the coordinates for the start and end points of each element
     start_coords = coords[elements[:, 0], :]
@@ -173,7 +207,7 @@ def solve(theta):
     K = assemble_stiffness(n_elements, elements, element_length, n_nodes)
     F = load_vector(coords, elements)
 
-    K = apply_boundary_conditions(K, F, dirichlet_nodes)
+    K, F = apply_boundary_conditions(K, F, dirichlet_nodes, neumann_edges, elements, coords)
     u = jnp.linalg.solve(K, F)
 
     return coords, u
@@ -182,15 +216,31 @@ def solve(theta):
 def solve_and_loss(theta):
     nx = int(theta.shape[1]/2)
     ny = nx
-    node_coords_x, node_coords_y  = softmax_nodes(theta)
-    # node_coords_x = jnp.linspace(0, 1, nx)
-    # node_coords_y = jnp.linspace(0, 1, ny)
+    # node_coords_x, node_coords_y  = softmax_nodes(theta)
+    node_coords_x = jnp.linspace(0, 1, nx)
+    node_coords_y = jnp.linspace(0, 1, ny)
     coords, elements = generate_mesh(nx, ny, node_coords_x, node_coords_y)
     dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
     neumann_nodes = jnp.append(nx*jnp.arange(2,ny)-1, jnp.arange((ny-1)*nx-1, ny*nx))
 
-    dirichlet_nodes = jnp.append(dirichlet_nodes, neumann_nodes)
-    # dirichlet_nodes = jnp.unique(dirichlet_nodes)
+    # dirichlet_nodes = jnp.append(dirichlet_nodes, neumann_nodes)
+    
+    # neumann_edges = jnp.zeros(((nx-1)+(ny-1),3))
+    ind1 = jnp.arange(ny-1, dtype=jnp.int64)*(nx-1) + (nx-2)
+    ind2 = (ny-2)*(nx-1) + jnp.arange(nx-1, dtype=jnp.int64)
+    local11 = jnp.ones((ny-1))
+    local12 = 2*jnp.ones((ny-1))
+    local21 = 2*jnp.ones((nx-1))
+    local22 = 3*jnp.ones((nx-1))
+    local1 = jnp.append(local11, local21)
+    local2 = jnp.append(local12, local22)
+    side1 = jnp.zeros((ny-1))
+    side2 = jnp.ones((nx-1))
+    side = jnp.append(side1,side2)
+    ind = jnp.append(ind1, ind2)
+    neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), ((nx-1)+(ny-1),4),order='F')
+    # neumann_edges = jnp.append(neumann_edges, local2, axis=1)
+
 
     n_elements = elements.shape[0]
     n_nodes = coords.shape[0]
@@ -205,9 +255,11 @@ def solve_and_loss(theta):
     K = assemble_stiffness(n_elements, elements, element_length, n_nodes)
     F = load_vector(coords, elements)
 
-    K = apply_boundary_conditions(K, F, dirichlet_nodes)
+    K, F = apply_boundary_conditions(K, F, dirichlet_nodes, neumann_edges, elements, coords)
     u = jnp.linalg.solve(K, F)
     
+    
+
     loss = 0.5*jnp.dot(u, jnp.dot(K, u)) - jnp.dot(F, u)
 
     return loss
@@ -263,24 +315,24 @@ def problem(problem_number):
 
 
 # print(solve_and_loss(jnp.zeros((200))))
-# coords, u = solve(jnp.zeros((100)))
+coords, u = solve(jnp.zeros((1,100)))
 # print(max(u))
 
 # # # ## ---------
 # # # # SOLUTION
 # # ## ---------
-# import matplotlib.pyplot as plt
-# import matplotlib.tri as tri
-# # # Crear el triángulo para el trazado
-# triangulation = tri.Triangulation(coords[:, 0], coords[:, 1])
+import matplotlib.pyplot as plt
+import matplotlib.tri as tri
+# # Crear el triángulo para el trazado
+triangulation = tri.Triangulation(coords[:, 0], coords[:, 1])
 
-# # Graficar el resultado
-# plt.figure(figsize=(8, 6))
-# plt.tricontourf(triangulation, u, cmap='viridis')
-# plt.colorbar(label='u (Solución)')
-# plt.title('Resultados de elementos finitos en 2D')
-# plt.xlabel('x')
-# plt.ylabel('y')
-# plt.axis('equal')  # Mantener proporciones
-# plt.savefig('femtest.png')
-# plt.show()
+# Graficar el resultado
+plt.figure(figsize=(8, 6))
+plt.tricontourf(triangulation, u, cmap='viridis')
+plt.colorbar(label='u (Solución)')
+plt.title('Resultados de elementos finitos en 2D')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.axis('equal')  # Mantener proporciones
+plt.savefig('femtest.png')
+plt.show()
