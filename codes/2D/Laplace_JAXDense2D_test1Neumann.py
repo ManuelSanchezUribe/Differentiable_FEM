@@ -7,7 +7,7 @@ from jax import config; config.update("jax_enable_x64", True)
 
 
 global problem_number
-problem_number=4
+problem_number=1
 
 #@jit
 def softmax_nodes(params):
@@ -157,8 +157,8 @@ def apply_boundary_conditions(K, F, dirichlet_nodes, neumann_edges, elements, co
     nodes = jnp.array([-1/3*jnp.sqrt(5+aux1), -1/3*jnp.sqrt(5-aux1), 0, 1/3*jnp.sqrt(5-aux1), 1/3*jnp.sqrt(5+aux1)])
     weights = jnp.array([(322-aux2)/900, (322+aux2)/900, 128/225, (322+aux2)/900, (322-aux2)/900])
     
-    # for i in range(neumann_edges.shape[0]//2):
-    for i in range(neumann_edges.shape[0]//3):
+    for i in range(neumann_edges.shape[0]//2):
+    # for i in range(neumann_edges.shape[0]//3):
     # for i in range(1):
         g = problem_test.gr
         e = neumann_edges[i, 0]
@@ -178,8 +178,8 @@ def apply_boundary_conditions(K, F, dirichlet_nodes, neumann_edges, elements, co
         F = F.at[elements[e, n1]].add(sum0)
         F = F.at[elements[e, n2]].add(sum1)
 
-    # for i in range(neumann_edges.shape[0]//2, neumann_edges.shape[0]):
-    for i in range(neumann_edges.shape[0]//3, neumann_edges.shape[0]):
+    for i in range(neumann_edges.shape[0]//2, neumann_edges.shape[0]):
+    # for i in range(neumann_edges.shape[0]//3, neumann_edges.shape[0]):
     # for i in range(1, neumann_edges.shape[0]):
         g = problem_test.gu
         e = neumann_edges[i, 0]
@@ -217,24 +217,26 @@ def solve(theta):
     n_elements = elements.shape[0]
     n_nodes = coords.shape[0]
 
-    # dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
-    dirichlet_nodes = nx*jnp.arange(ny)
+    dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
+    # dirichlet_nodes = nx*jnp.arange(ny)
     
     ind1 = jnp.arange(ny-1, dtype=jnp.int64) * (nx-1) + (nx-2)
-    # ind2 = (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64)
-    ind2 = jnp.append(jnp.arange(nx-1), (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64))
+    ind2 = (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64)
+    # ind2 = jnp.append(jnp.arange(nx-1), (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64))
 
-    # local1 = jnp.append(jnp.ones(ny-1), 2 * jnp.ones(nx-1))
-    local1 = jnp.append(jnp.ones(ny-1), jnp.zeros(nx-1))
-    local1 = jnp.append(local1, 2 * jnp.ones(nx-1))
-    # local2 = jnp.append(2 * jnp.ones(ny-1), 3 * jnp.ones(nx-1))
-    local2 = jnp.append(2 * jnp.ones(ny-1),jnp.ones(nx-1))
-    local2 = jnp.append(local2, 3 * jnp.ones(nx-1))
+    local1 = jnp.append(jnp.ones(ny-1), 2 * jnp.ones(nx-1))
+    # local1 = jnp.append(jnp.ones(ny-1), jnp.zeros(nx-1))
+    # local1 = jnp.append(local1, 2 * jnp.ones(nx-1))
+    local2 = jnp.append(2 * jnp.ones(ny-1), 3 * jnp.ones(nx-1))
+    # local2 = jnp.append(2 * jnp.ones(ny-1),jnp.ones(nx-1))
+    # local2 = jnp.append(local2, 3 * jnp.ones(nx-1))
 
-    side = jnp.append(jnp.zeros(ny-1), jnp.ones(2*(nx-1)))
+    side = jnp.append(jnp.zeros(ny-1), jnp.ones((nx-1)))
+    # side = jnp.append(jnp.zeros(ny-1), jnp.ones(2*(nx-1)))
     ind = jnp.append(ind1, ind2)
 
-    neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), (2*(nx-1) + (ny-1), 4), order='F')
+    neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), ((nx-1) + (ny-1), 4), order='F')
+    # neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), (2*(nx-1) + (ny-1), 4), order='F')
 
     # Extract the coordinates for the start and end points of each element
     start_coords = coords[elements[:, 0], :]
@@ -268,24 +270,26 @@ def solve_and_loss(theta):
     n_elements = elements.shape[0]
     n_nodes = coords.shape[0]
 
-    # dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
-    dirichlet_nodes = nx*jnp.arange(ny)
+    dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
+    # dirichlet_nodes = nx*jnp.arange(ny)
     
     ind1 = jnp.arange(ny-1, dtype=jnp.int64) * (nx-1) + (nx-2)
-    # ind2 = (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64)
-    ind2 = jnp.append(jnp.arange(nx-1), (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64))
+    ind2 = (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64)
+    # ind2 = jnp.append(jnp.arange(nx-1), (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64))
 
-    # local1 = jnp.append(jnp.ones(ny-1), 2 * jnp.ones(nx-1))
-    local1 = jnp.append(jnp.ones(ny-1), jnp.zeros(nx-1))
-    local1 = jnp.append(local1, 2 * jnp.ones(nx-1))
-    # local2 = jnp.append(2 * jnp.ones(ny-1), 3 * jnp.ones(nx-1))
-    local2 = jnp.append(2 * jnp.ones(ny-1),jnp.ones(nx-1))
-    local2 = jnp.append(local2, 3 * jnp.ones(nx-1))
+    local1 = jnp.append(jnp.ones(ny-1), 2 * jnp.ones(nx-1))
+    # local1 = jnp.append(jnp.ones(ny-1), jnp.zeros(nx-1))
+    # local1 = jnp.append(local1, 2 * jnp.ones(nx-1))
+    local2 = jnp.append(2 * jnp.ones(ny-1), 3 * jnp.ones(nx-1))
+    # local2 = jnp.append(2 * jnp.ones(ny-1),jnp.ones(nx-1))
+    # local2 = jnp.append(local2, 3 * jnp.ones(nx-1))
 
-    side = jnp.append(jnp.zeros(ny-1), jnp.ones(2*(nx-1)))
+    side = jnp.append(jnp.zeros(ny-1), jnp.ones((nx-1)))
+    # side = jnp.append(jnp.zeros(ny-1), jnp.ones(2*(nx-1)))
     ind = jnp.append(ind1, ind2)
 
-    neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), (2*(nx-1) + (ny-1), 4), order='F')
+    neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), ((nx-1) + (ny-1), 4), order='F')
+    # neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), (2*(nx-1) + (ny-1), 4), order='F')
 
     # Extract the coordinates for the start and end points of each element
     start_coords = coords[elements[:, 0], :]
