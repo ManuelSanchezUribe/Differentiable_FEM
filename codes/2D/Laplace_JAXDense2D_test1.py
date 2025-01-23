@@ -8,13 +8,12 @@ from jax import config; config.update("jax_enable_x64", True)
 global problem_number
 problem_number=0
 
-
+@jit
 def softmax_nodes(params):
     n_nodes = params.shape[1]
     # Compute the softmax values
     softmax_values_x = jax.nn.softmax(params[0, 0:int(n_nodes/2)])
     softmax_values_y = jax.nn.softmax(params[0, int(n_nodes/2):])
-    print(softmax_values_x)
 
     # Compute the cumulative sum of the softmax values in X axis
     cumulative_sum_x = jnp.cumsum(softmax_values_x)
@@ -34,50 +33,21 @@ values_phi0_ = jnp.array([[0.9083804012656871,  0.7331497981296533,  0.476544961
 # jnp.set_printoptions(precision=None, threshold =10000000000)
 
 # Generate a structured grid
+@partial(jax.jit, static_argnames=['nx', 'ny'])
 def generate_mesh(nx, ny, x, y):
-    # x = jnp.linspace(x_min, x_max, nx)
-    # y = jnp.linspace(y_min, y_max, ny)
-    n_el = (nx-1)*(ny-1)
-    coords = jnp.zeros((nx*ny,2))
-    elements = jnp.zeros((n_el,4), dtype=jnp.int64)
-
-    for i in range(nx):
-        for j in range(ny):
-            ind = j*nx + i
-            coords = coords.at[ind,0].set(x[i])
-            coords = coords.at[ind,1].set(y[j])
-    for i in range(nx-1):
-        for j in range(ny-1):
-            ind = j*(nx-1) + i
-            zero = ind + j
-            one = zero + 1
-            three = ind + (nx-1) + j + 1
-            two = three + 1
-            elements = elements.at[ind,:].set([zero, one, two, three])
+    #n_el = (nx-1)*(ny-1)
+    x_coords, y_coords = jnp.meshgrid(x, y, indexing='xy')
+    coords = jnp.column_stack((x_coords.flatten(), y_coords.flatten()))
+    i, j = jnp.meshgrid(jnp.arange(nx-1), jnp.arange(ny-1), indexing='xy')
+    ind = j * nx + i
+    zero = ind
+    one = zero + 1
+    three = zero + nx
+    two = three + 1
+    elements = jnp.stack([zero.flatten(), one.flatten(), two.flatten(), three.flatten()], axis=-1)
 
     return coords, elements
 
-
-# def generate_mesh(nx, ny, x, y):
-#     n_el = (nx-1)*(ny-1)
-    
-#     # Create a grid of coordinates
-#     print(x, y)
-#     x_coords, y_coords = jnp.meshgrid(x, y, indexing='xy')
-#     print(x_coords)
-#     coords = jnp.stack([x_coords.ravel(), y_coords.ravel()], axis=-1)
-#     print(coords)
-    
-#     # Create elements
-#     i, j = jnp.meshgrid(jnp.arange(nx-1), jnp.arange(ny-1), indexing='xy')
-#     ind = j * nx + i
-#     zero = ind
-#     one = zero + 1
-#     three = zero + nx
-#     two = three + 1
-#     elements = jnp.stack([zero.ravel(), one.ravel(), two.ravel(), three.ravel()], axis=-1)
-    
-#     return coords, elements
 
 # Assemble the stiffness matrix
 @jit
@@ -170,11 +140,10 @@ def apply_boundary_conditions(K, F, dirichlet_nodes):
     return K
 
 # Solve the system
-
+@jit
 def solve(theta):
-    nx = int(theta.shape[1]/2)
+    nx = int(theta.shape[1]/2) + 1
     ny = nx
-    
     node_coords_x, node_coords_y  = softmax_nodes(theta)
     # node_coords_x = jnp.linspace(0, 1, nx)
     # node_coords_y = jnp.linspace(0, 1, ny)
@@ -203,9 +172,9 @@ def solve(theta):
     return coords, u
 
 # Solve the system
-
+@jit
 def solve_and_loss(theta):
-    nx = int(theta.shape[1]/2)
+    nx = int(theta.shape[1]/2) + 1
     ny = nx
     node_coords_x, node_coords_y  = softmax_nodes(theta)
     # node_coords_x = jnp.linspace(0, 1, nx)
