@@ -142,7 +142,7 @@ def tricky_loss(y_pred, y_true):
 nn = int(2 * 2**4) # Two times the number of neurons 
 
 # Number of training iterations
-iterations = 5000
+iterations = 2000
 
 # Initialize the neural network model for the approximate solution
 model = make_model(nn)
@@ -179,6 +179,7 @@ plt.plot(history.history['loss'])
 node_coords, u = solve(model(jnp.array([1])))
 init_coords, o = solve(init_nodes)
 
+# print(node_coords)
 
 # # # Output results
 # print("Node coordinates:", node_coords)
@@ -189,16 +190,31 @@ init_coords, o = solve(init_nodes)
 # ## ---------
 # # SOLUTION
 ## ---------
-# Crear el triángulo para el trazado
-triangulation = tri.Triangulation(node_coords[:, 0], node_coords[:, 1])
 
-# Graficar el resultado
+# Obtener dimensiones de la grilla
+unique_x = np.unique(node_coords[:, 0])  # Valores únicos de x
+unique_y = np.unique(node_coords[:, 1])  # Valores únicos de y
+
+# Reorganizar Z en una matriz 2D
+Z_grid = u.reshape(len(unique_y), len(unique_x))  # Debe coincidir con la estructura de la grilla
+
+# Crear grilla a partir de coords
+X, Y = np.meshgrid(unique_x, unique_y)
+
+# Graficar la grilla con degradado entre nodos
 plt.figure(figsize=(8, 6))
-plt.tricontourf(triangulation, u, cmap='viridis')
-plt.triplot(triangulation, 'k-', lw=0.5)
+plt.pcolormesh(X, Y, Z_grid, shading='gouraud', cmap='viridis')  # shading='gouraud' para degradados suaves
 plt.colorbar(label='u (Solución)')
-plt.title('Resultados de elementos finitos en 2D')
+
+# Añadir las líneas de la malla
+for xi in unique_x:
+    plt.plot([xi] * len(unique_y), unique_y, color='black', linewidth=0.5)  # Líneas verticales
+for yi in unique_y:
+    plt.plot(unique_x, [yi] * len(unique_x), color='black', linewidth=0.5)  # Líneas horizontales
+
+# Configuración del gráfico
+plt.title('Resultados')
 plt.xlabel('x')
 plt.ylabel('y')
-plt.axis('equal')  # Mantener proporciones
+# plt.axis('equal')  # Mantener proporciones
 plt.show()
