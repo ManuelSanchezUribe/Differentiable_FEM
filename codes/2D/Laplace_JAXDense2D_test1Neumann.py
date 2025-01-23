@@ -3,6 +3,8 @@ import jax.numpy as jnp
 from jax import jit
 import keras
 from functools import partial
+from jax import config; config.update("jax_enable_x64", True)
+
 
 global problem_number
 problem_number=0
@@ -178,24 +180,17 @@ def solve(theta):
     n_nodes = coords.shape[0]
 
     dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
-    neumann_nodes = jnp.append(nx*jnp.arange(2,ny)-1, jnp.arange((ny-1)*nx-1, ny*nx))
+    
+    ind1 = jnp.arange(ny-1, dtype=jnp.int64) * (nx-1) + (nx-2)
+    ind2 = (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64)
 
-    # dirichlet_nodes = jnp.append(dirichlet_nodes, neumann_nodes)
+    local1 = jnp.append(jnp.ones(ny-1), 2 * jnp.ones(nx-1))
+    local2 = jnp.append(2 * jnp.ones(ny-1), 3 * jnp.ones(nx-1))
 
-    ind1 = jnp.arange(ny-1, dtype=jnp.int64)*(nx-1) + (nx-2)
-    ind2 = (ny-2)*(nx-1) + jnp.arange(nx-1, dtype=jnp.int64)
-    local11 = jnp.ones((ny-1))
-    local12 = 2*jnp.ones((ny-1))
-    local21 = 2*jnp.ones((nx-1))
-    local22 = 3*jnp.ones((nx-1))
-    local1 = jnp.append(local11, local21)
-    local2 = jnp.append(local12, local22)
-    side1 = jnp.zeros((ny-1))
-    side2 = jnp.ones((nx-1))
-    side = jnp.append(side1,side2)
+    side = jnp.append(jnp.zeros(ny-1), jnp.ones(nx-1))
     ind = jnp.append(ind1, ind2)
-    neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), ((nx-1)+(ny-1),4),order='F')
-    # neumann_edges = jnp.append(neumann_edges, local2, axis=1)
+
+    neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), ((nx-1) + (ny-1), 4), order='F')
 
     # Extract the coordinates for the start and end points of each element
     start_coords = coords[elements[:, 0], :]
@@ -216,34 +211,26 @@ def solve(theta):
 def solve_and_loss(theta):
     nx = int(theta.shape[1]/2)
     ny = nx
+    
     # node_coords_x, node_coords_y  = softmax_nodes(theta)
     node_coords_x = jnp.linspace(0, 1, nx)
     node_coords_y = jnp.linspace(0, 1, ny)
     coords, elements = generate_mesh(nx, ny, node_coords_x, node_coords_y)
-    dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
-    neumann_nodes = jnp.append(nx*jnp.arange(2,ny)-1, jnp.arange((ny-1)*nx-1, ny*nx))
-
-    # dirichlet_nodes = jnp.append(dirichlet_nodes, neumann_nodes)
-    
-    # neumann_edges = jnp.zeros(((nx-1)+(ny-1),3))
-    ind1 = jnp.arange(ny-1, dtype=jnp.int64)*(nx-1) + (nx-2)
-    ind2 = (ny-2)*(nx-1) + jnp.arange(nx-1, dtype=jnp.int64)
-    local11 = jnp.ones((ny-1))
-    local12 = 2*jnp.ones((ny-1))
-    local21 = 2*jnp.ones((nx-1))
-    local22 = 3*jnp.ones((nx-1))
-    local1 = jnp.append(local11, local21)
-    local2 = jnp.append(local12, local22)
-    side1 = jnp.zeros((ny-1))
-    side2 = jnp.ones((nx-1))
-    side = jnp.append(side1,side2)
-    ind = jnp.append(ind1, ind2)
-    neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), ((nx-1)+(ny-1),4),order='F')
-    # neumann_edges = jnp.append(neumann_edges, local2, axis=1)
-
-
     n_elements = elements.shape[0]
     n_nodes = coords.shape[0]
+
+    dirichlet_nodes = jnp.append(jnp.arange(nx),nx*jnp.arange(1,ny))
+    
+    ind1 = jnp.arange(ny-1, dtype=jnp.int64) * (nx-1) + (nx-2)
+    ind2 = (ny-2) * (nx-1) + jnp.arange(nx-1, dtype=jnp.int64)
+
+    local1 = jnp.append(jnp.ones(ny-1), 2 * jnp.ones(nx-1))
+    local2 = jnp.append(2 * jnp.ones(ny-1), 3 * jnp.ones(nx-1))
+
+    side = jnp.append(jnp.zeros(ny-1), jnp.ones(nx-1))
+    ind = jnp.append(ind1, ind2)
+
+    neumann_edges = jnp.reshape(jnp.concatenate([ind, local1, local2, side], axis=0), ((nx-1) + (ny-1), 4), order='F')
 
     # Extract the coordinates for the start and end points of each element
     start_coords = coords[elements[:, 0], :]
@@ -257,8 +244,6 @@ def solve_and_loss(theta):
 
     K, F = apply_boundary_conditions(K, F, dirichlet_nodes, neumann_edges, elements, coords)
     u = jnp.linalg.solve(K, F)
-    
-    
 
     loss = 0.5*jnp.dot(u, jnp.dot(K, u)) - jnp.dot(F, u)
 
@@ -325,7 +310,7 @@ import matplotlib.pyplot as plt
 import matplotlib.tri as tri
 # # Crear el triángulo para el trazado
 triangulation = tri.Triangulation(coords[:, 0], coords[:, 1])
-
+print(jnp.max(u))
 # Graficar el resultado
 plt.figure(figsize=(8, 6))
 plt.tricontourf(triangulation, u, cmap='viridis')
