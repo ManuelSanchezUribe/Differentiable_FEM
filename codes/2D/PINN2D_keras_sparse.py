@@ -139,7 +139,7 @@ def tricky_loss(y_pred, y_true):
 
 
 # Number of neurons per hidden layer in the neural network
-nn = int(2 * 2**5) # Two times the number of neurons 
+nn = int(2 * 2**4) # Two times the number of neurons 
 
 # Number of training iterations
 iterations = 5000
@@ -195,6 +195,7 @@ triangulation = tri.Triangulation(node_coords[:, 0], node_coords[:, 1])
 # Graficar el resultado
 plt.figure(figsize=(8, 6))
 plt.tricontourf(triangulation, u, cmap='viridis')
+plt.triplot(triangulation, 'k-', lw=0.5)
 plt.colorbar(label='u (Solución)')
 plt.title('Resultados de elementos finitos en 2D')
 plt.xlabel('x')

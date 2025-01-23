@@ -11,14 +11,15 @@ problem_number=0
 def softmax_nodes(params):
     n_nodes = params.shape[1]
     # Compute the softmax values
-    softmax_values = jax.nn.softmax(params)
+    softmax_values_x = jax.nn.softmax(params[0, 0:int(n_nodes/2)])
+    softmax_values_y = jax.nn.softmax(params[0, int(n_nodes/2):])
 
     # Compute the cumulative sum of the softmax values in X axis
-    cumulative_sum_x = jnp.cumsum(softmax_values[0, 0:int(n_nodes/2)])
+    cumulative_sum_x = jnp.cumsum(softmax_values_x)
     cumulative_sum_x_with_zero = jnp.insert(cumulative_sum_x, 0, 0)
 
     # Compute the cumulative sum of the softmax values in Y axis
-    cumulative_sum_y = jnp.cumsum(softmax_values[0, int(n_nodes/2):])
+    cumulative_sum_y = jnp.cumsum(softmax_values_y)
     cumulative_sum_y_with_zero = jnp.insert(cumulative_sum_y, 0, 0)
 
     return cumulative_sum_x_with_zero, cumulative_sum_y_with_zero
@@ -147,7 +148,7 @@ def apply_boundary_conditions(K, F, dirichlet_nodes):
 
 # Solve the system
 def solve(theta):
-    nx = int(theta.shape[0]/2)
+    nx = int(theta.shape[1]/2)
     ny = nx
     
     node_coords_x, node_coords_y  = softmax_nodes(theta)
@@ -179,7 +180,7 @@ def solve(theta):
 
 # Solve the system
 def solve_and_loss(theta):
-    nx = int(theta.shape[0]/2)
+    nx = int(theta.shape[1]/2)
     ny = nx
     node_coords_x, node_coords_y  = softmax_nodes(theta)
     # node_coords_x = jnp.linspace(0, 1, nx)
