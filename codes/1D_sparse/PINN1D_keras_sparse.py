@@ -133,7 +133,7 @@ def tricky_loss(y_pred, y_true):
 
 
 # Number of neurons per hidden layer in the neural network
-nn = 30000
+nn = 10000
 
 # Number of training iterations
 iterations = 1000

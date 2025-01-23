@@ -3,6 +3,8 @@ import jax.numpy as jnp
 from jax import jit
 import jax.experimental.sparse as sparse
 from functools import partial
+from jax.ops import segment_sum
+
 
 global problem_number
 problem_number=2
@@ -36,9 +38,56 @@ def element_load(coords):
     f            = problem_test.f
     return h * jnp.array([f(pt1)*phiatpt1 + f(pt2)*phiatpt2, f(pt1)*phiatpt2 + f(pt2)*phiatpt1]) / 2
 
-# Assemble global stiffness matrix and load vector
+
+@jit
+def create_COO(elements, ke_values):
+    NE       = elements.shape[0]
+    dof_mat  = jnp.tile(elements[:, None, :], (1, 2, 1))
+    dof_rows = dof_mat.reshape(NE, -1, order='C')
+    dof_cols = dof_mat.reshape(NE, -1, order='F')
+
+    rows = dof_rows.reshape(-1)
+    cols = dof_cols.reshape(-1)
+    ke_values_flatten = ke_values.reshape(-1)
+    ke_values_flatten = ke_values_flatten.at[1:3].set(0)
+    ke_values_flatten = ke_values_flatten.at[0].set(1)
+
+    return sparse.COO((ke_values_flatten, rows, cols), shape=(NE+1, NE+1))
+
+@partial(jax.jit, static_argnames=['n_removes', 'n_init_rows'])
+def to_csr(COO, n_removes, n_init_rows):
+    row  = COO.row
+    col  = COO.col
+    data = COO.data
+    max_col = col.max() + 1  
+    keys    = row * max_col + col
+
+    sort_indices = jnp.argsort(keys)
+    sorted_keys  = keys[sort_indices]
+    sorted_data  = data[sort_indices]
+    sorted_row   = row[sort_indices]
+    sorted_col   = col[sort_indices]
+
+    unique_mask = jnp.diff(jnp.concatenate([jnp.array([-1]), sorted_keys])) != 0
+    unique_indices = jnp.nonzero(unique_mask, size = sorted_keys.shape[0]-n_removes)[0]
+
+    inverse_indices = jnp.cumsum(unique_mask) - 1
+
+    data_summed = segment_sum(sorted_data, inverse_indices, num_segments=len(unique_indices))
+
+    final_row = sorted_row[unique_indices]
+    final_col = sorted_col[unique_indices]
+    change_mask = jnp.concatenate([jnp.array([True]), final_row[1:] != final_row[:-1]])
+
+    indices_filas = jnp.nonzero(change_mask, size=final_row.size, fill_value=0)[0]
+
+    indices_filas = jnp.append(indices_filas[0:n_init_rows], len(final_col))
+
+    return sparse.CSR((data_summed, final_col, indices_filas), shape=COO.shape)
+
+
 @partial(jax.jit, static_argnames=['n_elements', 'n_nodes'])
-def assemble(n_elements, node_coords, element_length, n_nodes):
+def assemble_CSR(n_elements, node_coords, element_length, n_nodes):
     element_nodes = jnp.stack((jnp.arange(0, n_elements), jnp.arange(1, n_elements+1)), axis=1) 
     coords        = node_coords[element_nodes]
     h_values      = element_length
@@ -48,41 +97,13 @@ def assemble(n_elements, node_coords, element_length, n_nodes):
     fe_values = jax.vmap(element_load)(coords)
     ke_values = jax.vmap(element_stiffness)(h_values)
 
-    # Compute the indices for vectorized updates
-    indices = jnp.arange(n_elements)  # Array of element indices
-    flat_indices = (3 * indices[:, None] + jnp.arange(4)).reshape(-1)  # Compute flattened indices
+    # Create COO matrix
+    COO = create_COO(element_nodes, ke_values)
 
-    # Flatten ke_values to match flat_indices
-    flattened_ke_values = ke_values.reshape(-1)
-
-    # Perform the update in a vectorized manner
-    values = values.at[flat_indices].add(flattened_ke_values)
-    values = values.at[1:3].set(0)
-    values = values.at[0].set(1)
-
-    rows = 3 * jnp.arange(n_nodes+1) - 1
-    rows = rows.at[0].set(0)
-    rows = rows.at[-1].add(-1)
-
-    start_indices = jnp.maximum(0, jnp.arange(n_nodes - 1) - 1)
-    end_indices = jnp.minimum(jnp.arange(n_nodes - 1) + 2, n_nodes)
-
-    # Compute ranges for all elements at once
-    max_range = 3  # Maximum possible range size (i.e., 3 elements: i-1, i, i+1)
-    range_matrix = jnp.arange(max_range) + start_indices[:, None]  # Broadcast addition
-    valid_mask = (range_matrix < end_indices[:, None]) & (range_matrix >= start_indices[:, None])
-
-    # Mask out invalid elements and flatten
-    valid_values = jnp.where(valid_mask, range_matrix, -1)
-
-    # Append the final elements
-    cols = jnp.array([0,1])
-    cols = jnp.append(cols, valid_values[1:])
-    cols = jnp.append(cols, jnp.array([n_nodes - 2, n_nodes - 1]))
-    K    = jax.experimental.sparse.CSR((values, cols, rows), shape=(n_nodes, n_nodes))
+    # Convert COO to CSR
+    K = to_csr(COO,n_nodes-2, n_nodes)
 
     F = jnp.zeros(n_nodes)
-
     F = F.at[element_nodes[:, 0]].add(fe_values[:, 0])
     F = F.at[element_nodes[:, 1]].add(fe_values[:, 1])
 
@@ -121,7 +142,7 @@ def solve(theta):
     node_coords = softmax_nodes(theta)
     element_length = node_coords[1:] - node_coords[:-1]
 
-    K, F = assemble(n_elements, node_coords, element_length, n_nodes)
+    K, F = assemble_CSR(n_elements, node_coords, element_length, n_nodes)
     K, F = apply_boundary_conditions(K, F)
     u  = sparse.linalg.spsolve(K.data, K.indices, K.indptr, F, reorder = 0)
 
@@ -139,7 +160,7 @@ def solve_and_loss(theta):
     node_coords    = softmax_nodes(theta)
     element_length = node_coords[1:] - node_coords[:-1]
 
-    K, F = assemble(n_elements, node_coords, element_length, n_nodes)
+    K, F = assemble_CSR(n_elements, node_coords, element_length, n_nodes)
     K, F = apply_boundary_conditions(K, F)
     
     u  = sparse.linalg.spsolve(K.data, K.indices, K.indptr, F, reorder = 0)
