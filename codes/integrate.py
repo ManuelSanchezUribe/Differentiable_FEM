@@ -1,3 +1,9 @@
+########################################################################################
+# Workshop: Coding for PDEs with Neural Networks
+# Date: 2025-24-01
+# Author: Danilo Aballay, Vicente Iligaray, Ignacio Tapia y Manuel Sánchez
+########################################################################################
+
 import sympy as sp
 
 # Define the variable and parameter

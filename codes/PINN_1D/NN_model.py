@@ -1,3 +1,9 @@
+########################################################################################
+# Workshop: Coding for PDEs with Neural Networks
+# Date: 2025-24-01
+# Author: Danilo Aballay, Vicente Iligaray, Ignacio Tapia y Manuel Sánchez
+########################################################################################
+
 import jax.numpy as np
 from jax import random, grad, jit, vmap
 import jax

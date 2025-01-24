@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
-
-# This code presents a simple implementation of Physics-Informed
-# Neural Networks (PINNs) as a collocation method. -- <50 lines of PINNS--
-
-# In this 1D example, we utilize Keras for constructing neural networks
-# and JAX in the backend.
+########################################################################################
+# Workshop: Coding for PDEs with Neural Networks
+# Date: 2025-24-01
+# Author: Danilo Aballay, Vicente Iligaray, Ignacio Tapia y Manuel Sánchez
+########################################################################################
 
 
 import jax
