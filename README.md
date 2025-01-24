@@ -10,7 +10,7 @@ Additionally, we developed a neural network that learns the relationship between
 
 **Date**: 2025-24-01
 
-**Author**: Danilo Aballay (danilo.aballay@uc.cl), Vicente Iligaray (vicente.iligaray@uc.cl), Ignacio Tapia (iptapia@uc.cl) y Manuel Sánchez (manuel.sanchez@uc.cl).
+**Author**: Danilo Aballay (danilo.aballay@uc.cl), Vicente Iligaray (vicente.iligaray@uc.cl), Ignacio Tapia (iptapia@uc.cl) and Manuel Sánchez (manuel.sanchez@uc.cl).
 
 
 
