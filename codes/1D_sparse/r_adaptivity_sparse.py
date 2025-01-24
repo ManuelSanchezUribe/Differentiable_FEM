@@ -178,8 +178,9 @@ max_loss = max(history.history['loss'])
 ticks = np.linspace(min_loss, max_loss, num=5)  # Ajusta el número de ticks según sea necesario
 plt.yticks(ticks)
 plt.grid(which='both', axis='both', linestyle=':', color='gray')
-plt.tight_layout()
 plt.title('Loss history')
+plt.tight_layout()
+
 plt.savefig('../Figures/Loss_history' + str(nn) + '_iter' + str(iterations) + '.png')
 
 node_coords, u = solve(model(jnp.array([1])))
