@@ -134,10 +134,10 @@ def tricky_loss(y_pred, y_true):
 
 
 # Number of neurons per hidden layer in the neural network
-nn = 2**4
+nn = 10000
 
 # Number of training iterations
-iterations = 10000
+iterations = 1000
 
 # Initialize the neural network model for the approximate solution
 model = make_model(nn)
@@ -169,8 +169,8 @@ print('Training time: ', end_time - start_time)
 # Plot loss history
 plt.figure(1)
 plt.plot(history.history['loss'])
-plt.xlabel('Epochs')
-plt.ylabel('Ritz loss')
+plt.xlabel('Epoch')
+plt.ylabel('Ritz')
 
 # Aumentar la resolución del eje y
 min_loss = min(history.history['loss'])

@@ -24,7 +24,7 @@ neurons    = 10
 n_layers   = 3
 n_nodes    = int(2**4)
 iterations = 1000
-sigmas     = jnp.array([0.5, 1, 2, 4], dtype = dtype)
+sigmas     = jnp.array([[0.5], [1], [2], [4]], dtype = dtype)
 
 # Create the model
 model = make_model(neurons, n_layers, n_nodes)
@@ -49,4 +49,4 @@ def lr_schedule(epoch, lr):
     return lr
 lr_scheduler = keras.callbacks.LearningRateScheduler(lr_schedule)
 
-history = loss_model.fit(jnp.array([1.]), jnp.array([1.]), epochs=iterations)
+history = loss_model.fit(sigmas, sigmas, epochs=iterations)

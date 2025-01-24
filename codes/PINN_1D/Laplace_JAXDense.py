@@ -1,11 +1,11 @@
 import jax
+from jax import lax
 import jax.numpy as jnp
 from jax import jit
 import keras
-from functools import partial
 
 global problem_number
-problem_number=2
+problem_number=3
 
 def softmax_nodes(params):
     # Compute the softmax values
@@ -19,48 +19,68 @@ def softmax_nodes(params):
 
     return cumulative_sum_with_zero
 
-# Define source function f(x)
-# def f(x):
-#     # return 0.7*0.3*x**(-1.3) + 1.7*0.7*x**(-0.3)
-#     # return 0
-#     return 0.7*0.3*x**(-1.3)
-
-# # Boundary conditions
-# def g0():
-#     return 0  # Value of u at x = 0
-#     # return 0.5
-# def g1():
-#     return 0  # Value of u at x = 1
-#     # return -0.5
-
-# Element stiffness matrix and load vector
-@jit
-def element_stiffness(h):
-    return jnp.array([[1, -1], [-1, 1]]) / h
-
-@jit
-def element_load(coords):
+def element_stiffness(coords, SIGMA): # Discontinuous case
+    aux1 = 2*jnp.sqrt(10/7)
+    aux2 = 13*jnp.sqrt(70)
+    nodes = jnp.array([-1/3*jnp.sqrt(5+aux1), -1/3*jnp.sqrt(5-aux1), 0, 1/3*jnp.sqrt(5-aux1), 1/3*jnp.sqrt(5+aux1)])
+    weights = jnp.array([(322-aux2)/900, (322+aux2)/900, 128/225, (322+aux2)/900, (322-aux2)/900])
     x1, x2 = coords
-    p1 = -1/jnp.sqrt(3)
-    p2 = 1/jnp.sqrt(3)
-    pt1 = (x2 - x1) * p1 / 2 + (x2 + x1) / 2
-    pt2 = (x2 - x1) * p2 / 2 + (x2 + x1) / 2
-    phiatpt1 = (p2+1)/2
-    phiatpt2 = (1+p1)/2
-    #midpoint = (x1 + x2) / 2
     h = x2 - x1
+
+    def branch_with_split(_):
+        xmid = 0.5
+        transformed_nodes_1 = 0.5 * (xmid - x1) * nodes + 0.5 * (x1 + xmid)
+        transformed_weights_1 = 0.5 * (xmid - x1) * weights
+        transformed_nodes_2 = 0.5 * (x2 - xmid) * nodes + 0.5 * (xmid + x2)
+        transformed_weights_2 = 0.5 * (x2 - xmid) * weights
+        sigma_int_1 = jnp.sum(transformed_weights_1 * jnp.array([SIGMA(x) for x in transformed_nodes_1]))
+        sigma_int_2 = jnp.sum(transformed_weights_2 * jnp.array([SIGMA(x) for x in transformed_nodes_2]))
+        return jnp.array([[sigma_int_1, -sigma_int_1], [-sigma_int_1, sigma_int_1]]) / (h**2) + \
+               jnp.array([[sigma_int_2, -sigma_int_2], [-sigma_int_2, sigma_int_2]]) / (h**2)
+
+    def branch_without_split(_):
+        transformed_nodes = 0.5 * (x2 - x1) * nodes + 0.5 * (x1 + x2)
+        transformed_weights = 0.5 * (x2 - x1) * weights
+        sigma_int = jnp.sum(transformed_weights * jnp.array([SIGMA(x) for x in transformed_nodes]))
+        return jnp.array([[sigma_int, -sigma_int], [-sigma_int, sigma_int]]) / (h**2)
+
+    result = lax.cond(
+        (x1 < 0.5) & (x2 > 0.5),
+        branch_with_split,
+        branch_without_split,
+        operand=None  # No additional argument is needed
+    )
+
+    return result
+
+
+def element_load(coords):
+    aux1 = 2*jnp.sqrt(10/7)
+    aux2 = 13*jnp.sqrt(70)
+    nodes = jnp.array([-1/3*jnp.sqrt(5+aux1), -1/3*jnp.sqrt(5-aux1), 0, 1/3*jnp.sqrt(5-aux1), 1/3*jnp.sqrt(5+aux1)])
+    weights = jnp.array([(322-aux2)/900, (322+aux2)/900, 128/225, (322+aux2)/900, (322-aux2)/900])
+    x1, x2 = coords
+
+    transformed_nodes = 0.5 * (x2 - x1) * nodes + 0.5 * (x1 + x2)
+    transformed_weights = 0.5 * (x2 - x1) * weights
+
     problem_test = problem(problem_number)
     f = problem_test.f
-    return h * jnp.array([f(pt1)*phiatpt1 + f(pt2)*phiatpt2, f(pt1)*phiatpt2 + f(pt2)*phiatpt1]) / 2
+    phi = lambda x: jnp.array([(x2-x)/(x2-x1), (x-x1)/(x2-x1)])
+    # Evaluate the integral using the transformed nodes and weights
+    return sum(w * f(x) * phi(x) for x, w in zip(transformed_nodes, transformed_weights))
+
 
 # Assemble global stiffness matrix and load vector
-@partial(jax.jit, static_argnames=['n_elements', 'n_nodes'])
-def assemble(n_elements, node_coords, element_length, n_nodes):
+def assemble(n_elements, node_coords, element_length, n_nodes, SIGMA):
     element_nodes = jnp.stack((jnp.arange(0, n_elements), jnp.arange(1, n_elements+1)), axis=1) 
     coords = node_coords[element_nodes]
     h_values = element_length
 
-    ke_values = jax.vmap(element_stiffness)(h_values)
+    def element_stiffness_with_sigma(coord):
+        return element_stiffness(coord, SIGMA)
+
+    ke_values = jax.vmap(element_stiffness_with_sigma)(coords)
     fe_values = jax.vmap(element_load)(coords)
 
     K = jnp.zeros((n_nodes, n_nodes))
@@ -77,7 +97,6 @@ def assemble(n_elements, node_coords, element_length, n_nodes):
     return K, F
 
 # Apply boundary conditions
-@jit
 def apply_boundary_conditions(K, F):
     problem_test = problem(problem_number)
     bc_g0 = problem_test.g0
@@ -86,55 +105,59 @@ def apply_boundary_conditions(K, F):
     # bc_g1 = g1()
 
     F = F - K[:, 0] * bc_g0
-    # F = F - K[:, -1] * bc_g1
+    F = F - K[:, -1] * bc_g1
 
     K = K.at[0, :].set(0)
     K = K.at[:, 0].set(0)
-    # K = K.at[-1, :].set(0)
-    # K = K.at[:, -1].set(0)
+    K = K.at[-1, :].set(0)
+    K = K.at[:, -1].set(0)
     K = K.at[0, 0].set(1)
-    # K = K.at[-1, -1].set(1)
+    K = K.at[-1, -1].set(1)
 
     F = F.at[0].set(bc_g0)
-    # F = F.at[-1].set(bc_g1)
-    F = F.at[-1].set(F[-1]+0.7)
+    F = F.at[-1].set(bc_g1)
+    # F = F.at[-1].set(F[-1]+0.7)
 
     return K, F
 
 # Solve the system
-@jit
-def solve(theta):
+def solve(theta, sigma):
     n_nodes = theta.shape[1] + 1
     n_elements = n_nodes - 1
     node_coords = softmax_nodes(theta)
     element_length = node_coords[1:] - node_coords[:-1]
 
-    K, F = assemble(n_elements, node_coords, element_length, n_nodes)
+    def sigma_fn(x):
+        return sigma*x + 0.1
+    
+    K, F = assemble(n_elements, node_coords, element_length, n_nodes, sigma_fn)
     K, F = apply_boundary_conditions(K, F)
+
     u = jnp.linalg.solve(K, F)
 
     return node_coords, u
 
 # Solve the system
-@jit
-def solve_and_loss(theta):
+def solve_and_loss(theta, sigma):
     problem_test = problem(problem_number)
     bc_g0 = problem_test.g0
     bc_g1 = problem_test.g1
 
+    def sigma_fn(x):
+        return sigma*x + 0.1
     n_nodes = theta.shape[1] + 1
     n_elements = n_nodes - 1
     node_coords = softmax_nodes(theta)
     element_length = node_coords[1:] - node_coords[:-1]
 
-    K, F = assemble(n_elements, node_coords, element_length, n_nodes)
+    K, F = assemble(n_elements, node_coords, element_length, n_nodes, sigma_fn)
     K, F = apply_boundary_conditions(K, F)
-    # u = jnp.linalg.solve(K, F) - (bc_g0*(1-node_coords) + bc_g1*(node_coords-0))
-    u = jnp.linalg.solve(K, F)
+    u = jnp.linalg.solve(K, F) - (bc_g0*(1-node_coords) + bc_g1*(node_coords-0))
+    # u = jnp.linalg.solve(K, F)
     
-    loss = 0.5*jnp.dot(u, jnp.dot(K, u)) - jnp.dot(F, u)
+    loss = (0.5*jnp.dot(u, jnp.dot(K, u)) - jnp.dot(F, u))
 
-    return loss
+    return loss 
 
 
 # # Define the problem domain and mesh
@@ -231,6 +254,12 @@ def problem(problem_number):
             "g1": 1,  # Dirichlet boundary condition at x=1
             "sigma": lambda x: 1,  # Constant coefficient sigma(x)
         },
+        {
+            "f": lambda x: 4*jnp.pi**2*jnp.sin(2*jnp.pi*x),  # Singular source term
+            "g0": 0,  # Dirichlet boundary condition at x=0
+            "g1": 0,  # Dirichlet boundary condition at x=1
+            "sigma": lambda x: jnp.piecewise(x, [x < 0.5, x >= 0.5], [1, 10]), # 1 + 9/(1+jnp.exp(-(x-0.5)*1000)) # Piecewise coefficient 
+        }
     ]
 
     # Ensure problem_number is within bounds

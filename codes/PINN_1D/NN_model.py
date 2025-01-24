@@ -1,108 +1,115 @@
+import jax.numpy as np
+from jax import random, grad, jit, vmap
 import jax
-import jax.numpy as jnp
-import numpy as np
-import keras
+import jax.nn as nn
+from jax.scipy.optimize import minimize
+from jax import lax
+import numpy as onp
+from jax.experimental.ode import odeint
+from jax.example_libraries import optimizers
+import matplotlib.pyplot as plt
+from jax import block_until_ready
+from functools import partial
 
-from Laplace_JAXDense import solve_and_loss, solve
+from Laplace_JAXDense import solve_and_loss, solve, softmax_nodes
 
-# Set the random seed
-np.random.seed(1234)
-keras.utils.set_random_seed(1234)
+key = random.PRNGKey(0)
 
-dtype='float64' # double precision set to default in the SCR functions
-jax.config.update("jax_enable_x64", True)
-keras.backend.set_floatx(dtype)
 
-sigmas     = jnp.array([0.5, 1, 2, 4], dtype = dtype)
+# Estructura red neuronal
 
-# =============================================================================
-#
-#          Source code - PINNs H01 1D
-#
-# =============================================================================
+def init_params(layers, key):
+    Ws = []
+    bs = []
+    for i in range(len(layers) - 1):
+        std_glorot = np.sqrt(2 / (layers[i] + layers[i + 1]))
+        key, subkey = random.split(key)
+        Ws.append(random.normal(subkey, (layers[i], layers[i + 1])) * std_glorot)
+        bs.append(np.zeros(layers[i + 1]))
+    return [Ws, bs]
 
-class special_layer(keras.layers.Layer):
-    def __init__(self, n_nodes, dimension, w_interior_initial_values = None, **kwargs):
-        super().__init__(**kwargs)
+# @jit
+def forward_pass(A_t, params):
+    Ws, bs = params
+    H = A_t
+    for i in range(len(Ws) - 1):
+        H = np.matmul(H, Ws[i]) + bs[i]
+        H = np.tanh(H)
+    alpha = np.matmul(H, Ws[-1]) + bs[-1]
+    return alpha
 
-        self.mobile_interior_vertices = self.add_weight(shape = (dimension, n_nodes), initializer = 'ones')
-        
-        if w_interior_initial_values is not None:
-            self.mobile_interior_vertices.assign(w_interior_initial_values)
-        else:
-            self.mobile_interior_vertices.assign(jnp.ones((dimension, n_nodes)) / n_nodes)
+@jit
+def loss(params, sigmas):
+    thetas = forward_pass(sigmas, params)
+    mapped_function = jax.vmap(solve_and_loss, in_axes=(0, 0))
+    ritz = mapped_function(thetas[:, None], sigmas)
+    return np.sum(ritz)
 
-    def call(self, inputs):
-        return jnp.array(self.mobile_interior_vertices)
+@partial(jit, static_argnums=(0,))
+def step(loss, i, opt_state, sigmas):
+    params = get_params(opt_state)
+    grads  = grad(loss)(params, sigmas)
+    return opt_update(0, grads, opt_state)
 
-def make_special_model(n_nodes, dimension=1, w_interior_initial_values=None):
-    L = special_layer(n_nodes, dimension, w_interior_initial_values)
-    xvals = keras.layers.Input(shape=(1,), name='x_input',dtype=dtype)
-    output = L(xvals)
-    model = keras.Model(inputs=xvals, outputs=output, name='model')
-    return model
+def FEM_sol(params, sigma):
+    thetas = forward_pass(sigma, params)
+    return solve(thetas, sigma)
 
-def make_model(neurons, n_layers, n_nodes, activation = 'tanh'):
+def train(loss_fn, opt_state,sigmas, nIter=10000):
+    train_loss = []
+    for it in range(nIter):
+        params = get_params(opt_state)
+        grads  = grad(loss_fn)(params, sigmas)
+        opt_state = opt_update(0, grads, opt_state)
+        # opt_state = step(loss, it, opt_state, A, C, t_span, lb, ub)
 
-    xvals = keras.layers.Input(shape=(1,), name='x_input',dtype=dtype)
+        if it % 10 == 0:
+            params = get_params(opt_state)
+            loss_val = loss_fn(params, sigmas)
+            train_loss.append(loss_val)
+            if it % 10 == 0:
+              print(f"Iteración {it}, pérdida: {loss_val:.4e}")
 
-    # First layer
-    l1 = keras.layers.Dense(neurons, activation=activation, dtype=dtype)(xvals)
+    return get_params(opt_state), train_loss
 
-    for l in range(n_layers-2):
-    # Hidden layers
-        l1 = keras.layers.Dense(neurons, activation=activation, dtype=dtype)(l1)
-    # Last layer
-    output = keras.layers.Dense(n_nodes, activation=None, dtype=dtype)(l1)
 
-    u_model = keras.Model(inputs = xvals, outputs = output, name='u_model')
+#######################################################################
+#                         TRAIN NN                                    #
+#######################################################################
 
-    return u_model
+neurons = 10
+layers  = 3
+n_nodes = 16
+iter    = 5000
+sigmas  = np.linspace(0.1,100,100)
+sigmas  = sigmas[:, None]
 
-class loss(keras.layers.Layer):
-    def __init__(self, model_theta,f, inputs, **kwargs):
-        super(loss, self).__init__()
-        self.model   = model_theta
-        self.f       = f #  theta -> FEM -> Ritz
-        self.sigma   = inputs
+# Parámetros de la red neuronal
+layers = [1, 10, 10, n_nodes]
+key    = random.PRNGKey(42)
 
-    def call(self,inputs):
-        thetas = self.model(self.sigma)  # Calcular los valores del modelo
-        return jnp.sum(jax.vmap(self.f)(thetas[:, None]))
-    
+# Entrenamiento
+opt_init, opt_update, get_params = optimizers.adam(1e-2)
+params    = init_params(layers, key)
+opt_state = opt_init(params)
 
-def make_loss_model(model, f, inputs):
-    """
-    Constructs a loss model for PINNs.
+# Configurar los parámetros
+trained_param, trained_error = train(loss, opt_state, sigmas, iter)
 
-    Args:
-        model (keras.Model): The neural network model for the approximate solution.
-        n_pts (int): Number of integration points.
+# Resultados
+plt.plot(trained_error)
 
-    Returns:
-        keras.Model: A model with the collocation-based loss function.
-    """
-    xvals = keras.layers.Input(shape=(1,), name='x_input',dtype=dtype)
+node_coords, u = FEM_sol(trained_param, np.array([sigmas[4]]))
 
-    # Compute the loss using the provided neural network and
-    # integration parameters
-    output = loss(model, f, inputs)(xvals)
-    # Create a Keras model for the loss
-    loss_model = keras.Model(inputs=xvals, outputs=output)
-
-    return loss_model
-
-def tricky_loss(y_pred, y_true):
-    """
-    A placeholder loss function that can be replaced as needed.
-
-    Args:
-        y_pred: Predicted values.
-        y_true: True values.
-
-    Returns:
-        float: The loss value.
-    """
-    # This is a placeholder loss function that can be substituted with a
-    # custom loss if required.
-    return y_true
+import matplotlib.pyplot as plt
+# fig, ax = plt.subplots()
+# # Plot the approximate solution obtained from the trained model
+plt.figure(2)
+plt.plot(node_coords, u,'o--', color='b')
+# plt.plot(init_coords, np.zeros(len(node_coords)),'o', color='k', alpha=0.5, markersize=5)
+# plt.plot(node_coords, np.zeros(len(node_coords)),'o', color='r', alpha=0.5, markersize=5)
+plt.legend(['u', 'nodes', 'initial nodes'])
+plt.xlabel('x')
+plt.ylabel('u')
+plt.grid(which = 'both', axis = 'both', linestyle = ':', color = 'gray')
+plt.tight_layout()
